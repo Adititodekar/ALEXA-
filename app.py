@@ -1,0 +1,142 @@
+"""
+FastAPI Server for Nova AI Assistant.
+Exposes voice conversation endpoints, location tracking, planner, wellbeing, and SOS handlers.
+"""
+
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import Optional, Dict, Any
+import os
+
+from core.brain import NovaBrain
+
+app = FastAPI(title="Nova AI Assistant API", version="2.0.0")
+
+# Enable CORS for all clients (Web, Mobile Android, iOS)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Initialize Brain
+brain = NovaBrain()
+
+class ChatRequest(BaseModel):
+    message: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+class SOSRequest(BaseModel):
+    situation: str = "User initiated manual panic button or distress call"
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+class LocationUpdateRequest(BaseModel):
+    latitude: float
+    longitude: float
+    accuracy: Optional[float] = None
+
+class DeadlineRequest(BaseModel):
+    title: str
+    due_date: str
+    category: str = "general"
+    priority: str = "medium"
+
+class AppLimitRequest(BaseModel):
+    app_name: str
+    limit_minutes: int
+
+# --- API Endpoints ---
+
+@app.post("/api/chat")
+async def chat_endpoint(req: ChatRequest):
+    """Conversational endpoint: processes voice/text input and coordinates all capabilities."""
+    if not req.message.strip():
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
+    
+    response = brain.process_message(
+        user_text=req.message,
+        user_lat=req.latitude,
+        user_lng=req.longitude
+    )
+    return response
+
+@app.post("/api/sos/trigger")
+async def sos_endpoint(req: SOSRequest):
+    """Direct emergency panic trigger: captures GPS coordinates and broadcasts alerts."""
+    res = brain.guardian.trigger_sos(
+        situation_description=req.situation,
+        lat=req.latitude,
+        lng=req.longitude,
+        address=brain.location_service.last_known_address
+    )
+    return res
+
+@app.get("/api/sos/history")
+async def get_sos_history():
+    return {"history": brain.guardian.sos_history}
+
+@app.post("/api/location/update")
+async def update_location(req: LocationUpdateRequest):
+    """Updates the assistant's knowledge of the user's current GPS location."""
+    res = brain.location_service.update_coords(req.latitude, req.longitude, req.accuracy)
+    return res
+
+@app.get("/api/location/current")
+async def get_current_location():
+    return {
+        "coords": brain.location_service.last_known_coords,
+        "address": brain.location_service.last_known_address
+    }
+
+@app.get("/api/location/directions")
+async def get_directions(destination: str, lat: Optional[float] = None, lng: Optional[float] = None):
+    """Generates turn-by-turn directions and distance metrics to destination."""
+    res = brain.location_service.get_route_and_directions(destination, start_lat=lat, start_lng=lng)
+    return res
+
+@app.get("/api/planner/daily")
+async def get_daily_plan():
+    """Returns conversation-synthesized daily schedule."""
+    return brain.planner.generate_daily_plan()
+
+@app.get("/api/planner/deadlines")
+async def get_deadlines():
+    """Returns all tracked submission deadlines with countdown status."""
+    return {"deadlines": brain.planner.get_deadlines()}
+
+@app.post("/api/planner/deadlines")
+async def add_deadline(req: DeadlineRequest):
+    """Adds a new submission deadline to track."""
+    res = brain.planner.add_deadline(req.title, req.due_date, req.category, req.priority)
+    return res
+
+@app.get("/api/wellbeing/status")
+async def get_wellbeing():
+    """Returns screen time, app consumption, and limits."""
+    return brain.wellbeing.get_summary()
+
+@app.post("/api/wellbeing/limit")
+async def set_wellbeing_limit(req: AppLimitRequest):
+    """Configures usage limit for a mobile app."""
+    return brain.wellbeing.set_app_limit(req.app_name, req.limit_minutes)
+
+@app.post("/api/wellbeing/focus")
+async def toggle_focus(enable: bool = True):
+    """Enables or disables strict focus mode."""
+    msg = brain.wellbeing.toggle_focus_mode(enable)
+    return {"focus_mode": enable, "message": msg}
+
+# Serve static frontend UI
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+if os.path.exists(static_dir):
+    app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=True)
