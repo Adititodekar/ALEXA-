@@ -1,0 +1,41 @@
+<!-- AndroidManifest.xml permissions snippet for Nova AI Assistant -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.nova.assistant">
+
+    <!-- 1. Voice Recognition & Audio -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <!-- 2. Real-Time Location & Geofencing -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
+    <!-- 3. Phone Usage Limits (Digital Wellbeing) -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- 4. Emergency SOS Dispatch & Direct Calling -->
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.SEND_SMS" />
+
+    <!-- 5. Network & Background Service -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="Nova AI"
+        android:theme="@style/Theme.Nova">
+
+        <!-- Background Guardian Service -->
+        <service
+            android:name=".NovaForegroundService"
+            android:foregroundServiceType="location"
+            android:enabled="true"
+            android:exported="false" />
+
+    </application>
+</manifest>

@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NOVA - Next-Gen Multimodal AI Assistant</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Leaflet Map CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans selection:bg-cyan-500 selection:text-black">
+
+    <!-- Top Navigation Bar -->
+    <header class="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md sticky top-0 z-50 px-6 py-3 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                <i data-lucide="bot" class="w-6 h-6 text-white"></i>
+            </div>
+            <div>
+                <div class="flex items-center space-x-2">
+                    <h1 class="text-lg font-bold tracking-tight text-white">NOVA AI</h1>
+                    <span class="px-2 py-0.5 text-xs rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800/60 font-mono">ALEXA-NEXT 2.0</span>
+                </div>
+                <p class="text-xs text-slate-400">Autonomous Multimodal Voice & Life Guardian</p>
+            </div>
+        </div>
+
+        <!-- Live Status Indicators -->
+        <div class="flex items-center space-x-4">
+            <!-- Mood Badge -->
+            <div id="moodBadge" class="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700 text-xs">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span id="moodText" class="text-slate-300">Mood: Calm & Attentive</span>
+            </div>
+
+            <!-- GPS Status -->
+            <div id="gpsStatus" class="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700 text-xs text-slate-300">
+                <i data-lucide="navigation" class="w-3.5 h-3.5 text-cyan-400"></i>
+                <span id="gpsLocationText">GPS: Detecting...</span>
+            </div>
+
+            <!-- Big Red SOS Trigger Button -->
+            <button id="sosBtn" class="flex items-center space-x-2 px-4 py-1.5 rounded-full bg-red-600 hover:bg-red-500 active:scale-95 transition-all text-white font-semibold text-xs shadow-lg shadow-red-600/30">
+                <i data-lucide="shield-alert" class="w-4 h-4"></i>
+                <span>SOS EMERGENCY</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- Left / Center: Interactive Voice Chat & Multimodal Display (7 Cols) -->
+        <div class="lg:col-span-7 flex flex-col space-y-4">
+            
+            <!-- Voice Orb & Alexa Visualizer Box -->
+            <div class="relative overflow-hidden rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 p-6 flex flex-col items-center justify-center text-center shadow-2xl min-h-[220px]">
+                <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(6,182,212,0.12)_0,transparent_70%)] pointer-events-none"></div>
+
+                <!-- Glowing Audio Orb -->
+                <div id="voiceOrb" class="relative cursor-pointer transition-all duration-300 transform hover:scale-105 mb-4">
+                    <div class="w-24 h-24 rounded-full bg-gradient-to-tr from-cyan-500 via-indigo-500 to-fuchsia-500 p-1 flex items-center justify-center shadow-lg shadow-cyan-500/25">
+                        <div class="w-full h-full bg-slate-950 rounded-full flex items-center justify-center">
+                            <i id="orbIcon" data-lucide="mic" class="w-10 h-10 text-cyan-400"></i>
+                        </div>
+                    </div>
+                    <!-- Audio Wave Rings (Active when speaking/listening) -->
+                    <div id="waveRing1" class="absolute inset-0 rounded-full border-2 border-cyan-400/40 opacity-0 scale-100 pointer-events-none"></div>
+                    <div id="waveRing2" class="absolute inset-0 rounded-full border-2 border-indigo-400/30 opacity-0 scale-100 pointer-events-none"></div>
+                </div>
+
+                <h2 id="assistantStatus" class="text-sm font-medium text-slate-300 tracking-wide uppercase">Click Orb or Speak "Hey Nova"</h2>
+                <p id="assistantSubtext" class="text-xs text-slate-500 mt-1">Talk naturally • Real-time images & video • Location aware • Deadline tracking</p>
+                
+                <!-- Quick Suggestion Pills -->
+                <div class="flex flex-wrap items-center justify-center gap-2 mt-4">
+                    <button class="suggestion-pill text-xs px-3 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition" onclick="quickAsk('Where am I and how do I reach the nearest metro?')">📍 Where am I?</button>
+                    <button class="suggestion-pill text-xs px-3 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition" onclick="quickAsk('Prepare my day based on my deadlines and meetings')">📅 Prepare My Day</button>
+                    <button class="suggestion-pill text-xs px-3 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition" onclick="quickAsk('Show me real images and videos of the James Webb Space Telescope')">🔭 James Webb Images</button>
+                    <button class="suggestion-pill text-xs px-3 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition" onclick="quickAsk('What are my phone usage limits and screen time?')">📱 Screen Time</button>
+                </div>
+            </div>
+
+            <!-- Conversational Stream & Multimodal Cards -->
+            <div id="chatFeed" class="flex-1 overflow-y-auto space-y-4 max-h-[500px] pr-2 scrollbar-thin">
+                <!-- Welcome Assistant Message -->
+                <div class="flex items-start space-x-3 bg-slate-900/70 border border-slate-800 p-4 rounded-2xl">
+                    <div class="w-8 h-8 rounded-lg bg-cyan-600/20 text-cyan-400 flex items-center justify-center shrink-0">
+                        <i data-lucide="sparkles" class="w-4 h-4"></i>
+                    </div>
+                    <div class="text-sm space-y-2 flex-1">
+                        <div class="font-semibold text-cyan-400">Nova Assistant</div>
+                        <p class="text-slate-300 leading-relaxed">
+                            Hello! I am your real-time voice and multimodal AI assistant. You can speak to me or type anytime. I monitor your daily schedule, keep your submission deadlines on track, provide real images and videos, guide your location if you're lost, supervise phone usage limits, and protect you with instant emergency SOS.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Input Bar -->
+            <form id="chatForm" class="flex items-center space-x-2 bg-slate-900/90 border border-slate-800 p-2 rounded-2xl focus-within:border-cyan-500 transition">
+                <button type="button" id="micBtn" class="p-2.5 rounded-xl bg-slate-800 hover:bg-cyan-600 hover:text-white text-cyan-400 transition" title="Start Voice Dictation">
+                    <i data-lucide="mic" class="w-5 h-5"></i>
+                </button>
+                <input type="text" id="userInput" placeholder="Ask anything, say 'help me', 'where am I', 'show me photos of mars'..." class="flex-1 bg-transparent text-sm text-slate-100 placeholder-slate-500 focus:outline-none px-2" autocomplete="off">
+                <button type="submit" class="p-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white transition flex items-center justify-center shadow-md shadow-cyan-600/30">
+                    <i data-lucide="send" class="w-4 h-4"></i>
+                </button>
+            </form>
+        </div>
+
+        <!-- Right Side: Live GPS Map, Deadlines & Digital Wellbeing (5 Cols) -->
+        <div class="lg:col-span-5 flex flex-col space-y-6">
+
+            <!-- 1. Live GPS Location & Directions Map -->
+            <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col space-y-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                        <i data-lucide="map-pin" class="w-4 h-4 text-cyan-400"></i>
+                        <h3 class="text-sm font-semibold text-slate-200">Live GPS & Navigation</h3>
+                    </div>
+                    <button id="recenterMapBtn" class="text-xs text-cyan-400 hover:underline flex items-center space-x-1">
+                        <i data-lucide="locate-fixed" class="w-3.5 h-3.5"></i>
+                        <span>Recenter</span>
+                    </button>
+                </div>
+
+                <!-- Leaflet Map Container -->
+                <div id="map" class="w-full h-44 rounded-xl border border-slate-800 z-10"></div>
+                <div id="locationAddressLabel" class="text-xs text-slate-400 bg-slate-950/70 p-2 rounded-lg border border-slate-800/80 truncate">
+                    Detecting current street address...
+                </div>
+            </div>
+
+            <!-- 2. Daily Agenda & Submission Deadlines -->
+            <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col space-y-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                        <i data-lucide="calendar-clock" class="w-4 h-4 text-indigo-400"></i>
+                        <h3 class="text-sm font-semibold text-slate-200">Deadlines & Day Schedule</h3>
+                    </div>
+                    <button id="addDeadlineBtn" class="text-xs bg-indigo-600/30 text-indigo-300 hover:bg-indigo-600/50 px-2.5 py-1 rounded-lg border border-indigo-500/40">
+                        + Add Deadline
+                    </button>
+                </div>
+
+                <!-- Deadlines List -->
+                <div id="deadlinesList" class="space-y-2 max-h-36 overflow-y-auto pr-1 text-xs">
+                    <div class="p-2 rounded-lg bg-slate-950/60 border border-slate-800/80 flex items-center justify-between">
+                        <div>
+                            <p class="font-medium text-slate-200">AI Machine Learning Project Submission</p>
+                            <span class="text-[10px] text-amber-400 font-mono">Due Tomorrow (5:00 PM)</span>
+                        </div>
+                        <span class="px-2 py-0.5 rounded-full bg-amber-950 text-amber-400 border border-amber-800/60 text-[10px]">High</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. Phone Usage Limits & Digital Wellbeing -->
+            <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col space-y-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                        <i data-lucide="smartphone" class="w-4 h-4 text-emerald-400"></i>
+                        <h3 class="text-sm font-semibold text-slate-200">Phone Usage & Screen Limits</h3>
+                    </div>
+                    <button id="focusModeToggle" class="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 hover:text-white border border-slate-700">
+                        Focus Mode: OFF
+                    </button>
+                </div>
+
+                <!-- Screen time progress -->
+                <div class="space-y-1.5">
+                    <div class="flex justify-between text-xs">
+                        <span class="text-slate-400">Today's Screen Time</span>
+                        <span id="screenTimeCount" class="font-bold text-emerald-400">2h 47m / 3h Limit</span>
+                    </div>
+                    <div class="w-full bg-slate-800 rounded-full h-2">
+                        <div id="screenTimeBar" class="bg-gradient-to-r from-emerald-500 to-amber-500 h-2 rounded-full" style="width: 82%"></div>
+                    </div>
+                </div>
+
+                <!-- App consumption bars -->
+                <div class="grid grid-cols-2 gap-2 text-[11px] pt-1">
+                    <div class="p-2 rounded-lg bg-slate-950/60 border border-slate-800">
+                        <div class="flex justify-between text-slate-400"><span>Instagram</span><span class="text-amber-400 font-bold">42m / 45m</span></div>
+                        <div class="w-full bg-slate-800 h-1.5 rounded-full mt-1"><div class="bg-amber-400 h-1.5 rounded-full" style="width: 93%"></div></div>
+                    </div>
+                    <div class="p-2 rounded-lg bg-slate-950/60 border border-slate-800">
+                        <div class="flex justify-between text-slate-400"><span>YouTube</span><span class="text-emerald-400 font-bold">55m / 60m</span></div>
+                        <div class="w-full bg-slate-800 h-1.5 rounded-full mt-1"><div class="bg-emerald-400 h-1.5 rounded-full" style="width: 91%"></div></div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Emergency Modal Triggered on SOS -->
+    <div id="sosModal" class="fixed inset-0 bg-red-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border-2 border-red-500 rounded-3xl max-w-md w-full p-6 text-center space-y-4 shadow-2xl shadow-red-500/30">
+            <div class="w-16 h-16 rounded-full bg-red-600/30 text-red-500 border border-red-500 mx-auto flex items-center justify-center animate-bounce">
+                <i data-lucide="alert-triangle" class="w-8 h-8"></i>
+            </div>
+            <h2 class="text-xl font-bold text-white">EMERGENCY SOS DISPATCHED</h2>
+            <p id="sosModalDesc" class="text-xs text-slate-300">
+                Your live GPS coordinates and distress report have been dispatched to Emergency Services and designated personal contacts.
+            </p>
+            <div id="sosCoordsBox" class="p-3 rounded-xl bg-slate-950 border border-red-500/50 font-mono text-xs text-red-400">
+                Coordinates: Broadcasting...
+            </div>
+            <div class="flex space-x-3 pt-2">
+                <button id="cancelSosBtn" class="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold">
+                    I am Safe (Cancel Alert)
+                </button>
+                <a id="callEmergencyBtn" href="tel:112" class="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold flex items-center justify-center space-x-1">
+                    <i data-lucide="phone-call" class="w-4 h-4"></i>
+                    <span>Call 112 / 911</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Deadline Modal -->
+    <div id="deadlineModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-5 space-y-3">
+            <h3 class="text-sm font-semibold text-white">Add New Submission Deadline</h3>
+            <input type="text" id="newDeadlineTitle" placeholder="e.g. Physics Lab Report" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+            <input type="datetime-local" id="newDeadlineDate" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500">
+            <div class="flex justify-end space-x-2 pt-2">
+                <button id="closeDeadlineModalBtn" class="px-3 py-1.5 text-xs text-slate-400 hover:text-white">Cancel</button>
+                <button id="saveDeadlineBtn" class="px-4 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium">Save Deadline</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
