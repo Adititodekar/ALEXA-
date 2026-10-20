@@ -21,6 +21,7 @@ from .media_service import MediaService
 from .wellbeing_tracker import WellbeingTracker
 from .planner import Planner
 from .conversation_engine import ConversationEngine
+from .smart_home import smart_home_hub
 
 load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
 logger = logging.getLogger(__name__)
@@ -33,14 +34,15 @@ class NovaBrain:
         self.media_service = MediaService()
         self.wellbeing = WellbeingTracker()
         self.planner = Planner()
+        self.smart_home = smart_home_hub
         self.conversation = ConversationEngine(media_service=self.media_service)
         
         # Optional Gemini API integration with safe fallback
         self.gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
-        self.gemini_model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash").strip()
+        self.gemini_model = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash").strip()
         self.gemini_client = None
 
-        if self.gemini_key and self.gemini_key.startswith("AIza"):
+        if self.gemini_key:
             try:
                 from google import genai
                 self.gemini_client = genai.Client(api_key=self.gemini_key)
@@ -48,9 +50,6 @@ class NovaBrain:
             except Exception as exc:
                 logger.warning("Could not initialize Gemini client: %s. Using built-in conversational engine.", exc)
                 self.gemini_client = None
-        else:
-            if self.gemini_key:
-                logger.info("GEMINI_API_KEY is not a standard AI Studio key. Using built-in dynamic conversational engine.")
 
     def process_message(self, user_text: str, user_lat: Optional[float] = None, user_lng: Optional[float] = None) -> Dict[str, Any]:
         """
@@ -215,7 +214,108 @@ class NovaBrain:
                 "planner": None
             }
 
-        # 8. Real Conversational Intelligence & Knowledge Synthesis
+        # 8. Smart Home IoT & Energy Tool Execution
+        if any(w in lowered for w in ["light", "fan", "tv", "television", "cooler", "ac", "device", "energy", "watt", "power usage", "electricity", "saving tips"]):
+            # Check for device toggle
+            is_turn_on = any(w in lowered for w in ["turn on", "switch on", "power on", "enable", "start"])
+            is_turn_off = any(w in lowered for w in ["turn off", "switch off", "power off", "disable", "stop"])
+            
+            if is_turn_on or is_turn_off:
+                target_state = True if is_turn_on else False
+                target_dev = "living_room_light"
+                if "fan" in lowered:
+                    target_dev = "bedroom_fan"
+                elif "tv" in lowered or "television" in lowered:
+                    target_dev = "television"
+                elif "cooler" in lowered or "ac" in lowered or "kitchen" in lowered:
+                    target_dev = "kitchen_ac"
+                elif "light" in lowered:
+                    target_dev = "living_room_light"
+
+                res = self.smart_home.set_device_state(target_dev, target_state)
+                speech = res["note"]
+                self.conversation.record_turn(clean_text, speech, topic="smart_home")
+                energy = self.smart_home.get_energy_summary()
+                return {
+                    "speech_reply": speech,
+                    "display_reply": f"💡 **Smart Home Control**\n{speech}\nCurrent Home Power Draw: **{energy['estimated_current_watts']} W** across {energy['active_devices_count']} active devices.",
+                    "reply": speech,
+                    "mood": mood_data,
+                    "type": "smart_home",
+                    "smart_home": {
+                        "action": "toggle",
+                        "device": res,
+                        "devices": self.smart_home.list_devices(),
+                        "energy": energy
+                    },
+                    "location": current_location,
+                    "media": None,
+                    "navigation": None,
+                    "planner": None,
+                    "wellbeing": None
+                }
+
+            # Energy summary or tips
+            if any(w in lowered for w in ["energy", "power", "watt", "electricity", "saving tip"]):
+                energy = self.smart_home.get_energy_summary()
+                tips = self.smart_home.get_saving_tips()
+                active_str = ", ".join(energy["active_devices"]) if energy["active_devices"] else "None (All off)"
+                speech = (
+                    f"Current home power usage is estimated at {energy['estimated_current_watts']} watts. "
+                    f"Active devices: {active_str}."
+                )
+                display = (
+                    f"⚡ **Energy & Power Monitor**\n"
+                    f"Current Estimated Load: **{energy['estimated_current_watts']} W**\n"
+                    f"Active Devices ({energy['active_devices_count']}): **{active_str}**\n\n"
+                    f"💡 *Tip: {tips[0]}*"
+                )
+                self.conversation.record_turn(clean_text, speech, topic="energy")
+                return {
+                    "speech_reply": speech,
+                    "display_reply": display,
+                    "reply": speech,
+                    "mood": mood_data,
+                    "type": "smart_home",
+                    "smart_home": {
+                        "action": "energy_summary",
+                        "devices": self.smart_home.list_devices(),
+                        "energy": energy,
+                        "tips": tips
+                    },
+                    "location": current_location,
+                    "media": None,
+                    "navigation": None,
+                    "planner": None,
+                    "wellbeing": None
+                }
+
+            # List devices
+            if any(w in lowered for w in ["devices", "smart home", "what is on", "which devices"]):
+                devs = self.smart_home.list_devices()
+                energy = self.smart_home.get_energy_summary()
+                active_list = [d["name"] for d in devs.values() if d["on"]]
+                speech = f"You have {len(devs)} smart devices connected. Currently active: {', '.join(active_list) if active_list else 'none'}."
+                self.conversation.record_turn(clean_text, speech, topic="smart_home")
+                return {
+                    "speech_reply": speech,
+                    "display_reply": f"🏠 **Smart Home Devices**\n{speech}\nTotal power draw: **{energy['estimated_current_watts']} W**.",
+                    "reply": speech,
+                    "mood": mood_data,
+                    "type": "smart_home",
+                    "smart_home": {
+                        "action": "list",
+                        "devices": devs,
+                        "energy": energy
+                    },
+                    "location": current_location,
+                    "media": None,
+                    "navigation": None,
+                    "planner": None,
+                    "wellbeing": None
+                }
+
+        # 9. Real Conversational Intelligence & Knowledge Synthesis
         # Try Gemini if configured and working; otherwise seamlessly use built-in ConversationEngine
         speech = None
         display_reply = None
@@ -223,10 +323,19 @@ class NovaBrain:
 
         if self.gemini_client:
             try:
+                # Provide multi-turn conversational context & environment metadata
+                recent_history = self.conversation.history[-6:]
+                history_lines = [f"{h['role'].capitalize()}: {h['text']}" for h in recent_history]
+                history_text = "\n".join(history_lines) if history_lines else "None"
+                loc_name = current_location.get("address", "Bangalore, India") if current_location else "Unknown"
+
                 prompt = (
-                    "You are Nova, an intelligent, empathetic voice AI assistant. "
-                    "Provide a helpful, conversational, natural answer in 2 to 4 sentences. "
-                    f"User: {clean_text}"
+                    "You are Nova, an intelligent, empathetic voice AI assistant (Alexa-Next).\n"
+                    f"User State: Mood={mood_data.get('primary_mood', 'calm')}, Location={loc_name}\n"
+                    f"Recent conversation turns:\n{history_text}\n\n"
+                    f"User asked: {clean_text}\n\n"
+                    "Provide a helpful, conversational, natural answer in 2 to 4 sentences suitable for spoken output. "
+                    "Be warm, direct, and concise."
                 )
                 res = self.gemini_client.models.generate_content(
                     model=self.gemini_model,

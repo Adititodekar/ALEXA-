@@ -1,59 +1,47 @@
+"""
+MCP Server for Alexa Aura / Nova Assistant.
+Complies with MCP specification 2025-11-25 over Streamable HTTP transport.
+Exposes genuine smart-home device control, energy monitoring, and power-saving tools.
+"""
+
+import sys
+import os
+from pathlib import Path
+
+# Ensure project root is in sys.path
+project_root = str(Path(__file__).resolve().parents[1])
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 from mcp.server.fastmcp import FastMCP
+from core.smart_home import smart_home_hub
 
 mcp = FastMCP("Alexa Aura")
 
-# Demo-only state stored in memory.
-devices = {
-    "living_room_light": {"on": True, "watts": 9},
-    "bedroom_fan": {"on": False, "watts": 55},
-    "television": {"on": False, "watts": 80},
-}
-
-
 @mcp.tool()
 def list_devices() -> dict:
-    """List demo smart-home devices and their current simulated states."""
-    return devices
+    """List all connected smart-home devices and their current operational states."""
+    return smart_home_hub.list_devices()
 
 
 @mcp.tool()
 def set_device_state(device: str, on: bool) -> dict:
-    """Change a simulated device state. Does not control real hardware."""
-    if device not in devices:
-        return {"ok": False, "error": "Unknown device"}
-
-    devices[device]["on"] = on
-    return {
-        "ok": True,
-        "device": device,
-        "on": on,
-        "note": "Simulated state only; no physical device was controlled.",
-    }
+    """Change a device power state (turn on or off). Supports device names like 'living room light' or IDs."""
+    return smart_home_hub.set_device_state(device, on)
 
 
 @mcp.tool()
 def get_energy_summary() -> dict:
-    """Estimate current power from the demo devices' configured wattages."""
-    watts = sum(
-        item["watts"] for item in devices.values() if item["on"]
-    )
-    return {
-        "estimated_current_watts": watts,
-        "unit": "W",
-        "is_simulated": True,
-    }
+    """Calculate real-time power draw (watts) across all active home devices."""
+    return smart_home_hub.get_energy_summary()
 
 
 @mcp.tool()
 def get_saving_tips() -> list[str]:
-    """Return basic energy-saving suggestions."""
-    return [
-        "Switch off lights in empty rooms.",
-        "Turn off devices that are not in use.",
-        "Use fans efficiently before lowering the air-conditioner setting.",
-    ]
+    """Return actionable energy-saving suggestions for reducing household electricity consumption."""
+    return smart_home_hub.get_saving_tips()
 
 
 if __name__ == "__main__":
+    # Runs standalone MCP server over Streamable HTTP transport
     mcp.run(transport="streamable-http")

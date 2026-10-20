@@ -8,12 +8,30 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
+from contextlib import asynccontextmanager
 import os
 import logging
 
 from core.brain import NovaBrain
+from server.app import mcp
 
-app = FastAPI(title="Nova AI Assistant API", version="2.0.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Initialize FastMCP streamable-http session manager and transport security
+    mcp.settings.streamable_http_path = "/"
+    if hasattr(mcp.settings, "transport_security"):
+        mcp.settings.transport_security.allowed_hosts = [
+            "localhost", "127.0.0.1", "localhost:8000", "127.0.0.1:8000", "0.0.0.0", "*"
+        ]
+    try:
+        async with mcp.session_manager.run():
+            logging.getLogger(__name__).info("FastMCP Streamable HTTP session manager running.")
+            yield
+    except Exception as exc:
+        logging.getLogger(__name__).warning("FastMCP session manager error: %s", exc)
+        yield
+
+app = FastAPI(title="Nova AI Assistant API", version="2.0.0", lifespan=lifespan)
 
 # Enable CORS for all clients (Web, Mobile Android, iOS)
 app.add_middleware(
@@ -51,6 +69,10 @@ class DeadlineRequest(BaseModel):
 class AppLimitRequest(BaseModel):
     app_name: str
     limit_minutes: int
+
+class DeviceToggleRequest(BaseModel):
+    device: str
+    on: bool
 
 # --- API Endpoints ---
 
@@ -132,6 +154,54 @@ async def add_deadline(req: DeadlineRequest):
     res = brain.planner.add_deadline(req.title, req.due_date, req.category, req.priority)
     return res
 
+@app.delete("/api/planner/deadlines/{deadline_id}")
+async def delete_deadline_endpoint(deadline_id: int):
+    """Permanently deletes a deadline."""
+    ok = brain.planner.delete_deadline(deadline_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Deadline not found")
+    return {"ok": True, "id": deadline_id, "deleted": True}
+
+@app.post("/api/planner/deadlines/{deadline_id}/complete")
+async def complete_deadline_endpoint(deadline_id: int):
+    """Marks a deadline as completed."""
+    ok = brain.planner.complete_deadline(deadline_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Deadline not found")
+    return {"ok": True, "id": deadline_id, "completed": True}
+
+@app.get("/api/health")
+async def health_endpoint():
+    """System health check and diagnostic status."""
+    return {
+        "status": "online",
+        "service": "Nova AI Assistant API",
+        "version": "2.0.0",
+        "gemini_active": brain.gemini_client is not None,
+        "gemini_model": brain.gemini_model if brain.gemini_client else "offline_conversational_fallback",
+        "mcp_enabled": True
+    }
+
+# --- Smart Home & Energy Endpoints ---
+
+@app.get("/api/devices")
+async def list_devices():
+    """Lists all smart home devices and operational states."""
+    return brain.smart_home.list_devices()
+
+@app.post("/api/device")
+async def set_device(req: DeviceToggleRequest):
+    """Controls a smart home device."""
+    res = brain.smart_home.set_device_state(req.device, req.on)
+    if not res.get("ok"):
+        raise HTTPException(status_code=400, detail=res.get("error", "Failed to set device"))
+    return res
+
+@app.get("/api/energy")
+async def energy_summary():
+    """Returns current estimated household power draw."""
+    return brain.smart_home.get_energy_summary()
+
 @app.get("/api/wellbeing/status")
 async def get_wellbeing():
     """Returns screen time, app consumption, and limits."""
@@ -147,6 +217,19 @@ async def toggle_focus(enable: bool = True):
     """Enables or disables strict focus mode."""
     msg = brain.wellbeing.toggle_focus_mode(enable)
     return {"focus_mode": enable, "message": msg}
+
+# Mount FastMCP Streamable HTTP app for MCP specification compliance (Route A)
+try:
+    from server.app import mcp
+    mcp.settings.streamable_http_path = "/"
+    if hasattr(mcp.settings, "transport_security"):
+        mcp.settings.transport_security.allowed_hosts = [
+            "localhost", "127.0.0.1", "localhost:8000", "127.0.0.1:8000", "0.0.0.0", "*"
+        ]
+    app.mount("/mcp", mcp.streamable_http_app())
+    logging.getLogger(__name__).info("Mounted FastMCP Streamable HTTP app at /mcp")
+except Exception as exc:
+    logging.getLogger(__name__).warning("Could not mount FastMCP endpoint: %s", exc)
 
 # Serve static frontend UI
 static_dir = os.path.join(os.path.dirname(__file__), "static")

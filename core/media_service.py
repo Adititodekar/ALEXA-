@@ -22,7 +22,7 @@ class MediaService:
         return {
             "summary": wiki_data.get("extract", ""),
             "title": wiki_data.get("title", query),
-            "primary_image": wiki_data.get("image_url") or (images[0] if images else None),
+            "primary_image": wiki_data.get("image_url") or (images[0]["url"] if images and isinstance(images[0], dict) else (images[0] if images else None)),
             "gallery": images,
             "videos": videos,
             "source_url": wiki_data.get("content_urls", {}).get("desktop", {}).get("page", "")

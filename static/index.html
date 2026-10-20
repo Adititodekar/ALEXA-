@@ -62,11 +62,21 @@
             <div class="relative overflow-hidden rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 p-6 flex flex-col items-center justify-center text-center shadow-2xl min-h-[220px]">
                 <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(6,182,212,0.12)_0,transparent_70%)] pointer-events-none"></div>
 
-                <!-- Glowing Audio Orb -->
-                <div id="voiceOrb" class="relative cursor-pointer transition-all duration-300 transform hover:scale-105 mb-4">
-                    <div class="w-24 h-24 rounded-full bg-gradient-to-tr from-cyan-500 via-indigo-500 to-fuchsia-500 p-1 flex items-center justify-center shadow-lg shadow-cyan-500/25">
-                        <div class="w-full h-full bg-slate-950 rounded-full flex items-center justify-center">
-                            <i id="orbIcon" data-lucide="mic" class="w-10 h-10 text-cyan-400"></i>
+                <!-- Glowing Animated Alexa Eye Core -->
+                <div id="voiceOrb" class="state-idle mb-4" title="Click to speak with Nova">
+                    <div class="eye-aura"></div>
+                    <div class="eye-orbit-ring"></div>
+                    <div class="eye-iris">
+                        <div class="eye-core">
+                            <div class="eye-pupil-glow"></div>
+                            <i id="orbIcon" data-lucide="mic" class="w-8 h-8 text-cyan-300 z-10 transition-transform"></i>
+                            <div class="eye-wave-bars">
+                                <div class="eye-bar"></div>
+                                <div class="eye-bar"></div>
+                                <div class="eye-bar"></div>
+                                <div class="eye-bar"></div>
+                                <div class="eye-bar"></div>
+                            </div>
                         </div>
                     </div>
                     <!-- Audio Wave Rings (Active when speaking/listening) -->
@@ -74,14 +84,15 @@
                     <div id="waveRing2" class="absolute inset-0 rounded-full border-2 border-indigo-400/30 opacity-0 scale-100 pointer-events-none"></div>
                 </div>
 
-                <h2 id="assistantStatus" class="text-sm font-medium text-slate-300 tracking-wide uppercase">Click Orb or Speak "Hey Nova"</h2>
-                <p id="assistantSubtext" class="text-xs text-slate-500 mt-1">Talk naturally • Real-time images & video • Location aware • Deadline tracking</p>
+                <h2 id="assistantStatus" class="text-sm font-medium text-slate-300 tracking-wide uppercase">Click Eye or Speak "Hey Nova"</h2>
+                <p id="assistantSubtext" class="text-xs text-slate-500 mt-1">Talk naturally • Real-time images & video • Smart Home • Deadline tracking</p>
                 
                 <!-- Quick Suggestion Pills -->
                 <div class="flex flex-wrap items-center justify-center gap-2 mt-4">
                     <button class="suggestion-pill text-xs px-3 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition" onclick="quickAsk('Where am I and how do I reach the nearest metro?')">📍 Where am I?</button>
                     <button class="suggestion-pill text-xs px-3 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition" onclick="quickAsk('Prepare my day based on my deadlines and meetings')">📅 Prepare My Day</button>
                     <button class="suggestion-pill text-xs px-3 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition" onclick="quickAsk('Show me real images and videos of the James Webb Space Telescope')">🔭 James Webb Images</button>
+                    <button class="suggestion-pill text-xs px-3 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition" onclick="quickAsk('Turn on the living room light and show energy usage')">💡 Smart Home & Energy</button>
                     <button class="suggestion-pill text-xs px-3 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition" onclick="quickAsk('What are my phone usage limits and screen time?')">📱 Screen Time</button>
                 </div>
             </div>
@@ -197,6 +208,32 @@
                 </div>
             </div>
 
+            <!-- 4. Smart Home IoT & Energy Monitor (MCP Tools & Simulated Devices) -->
+            <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col space-y-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                        <i data-lucide="zap" class="w-4 h-4 text-amber-400"></i>
+                        <h3 class="text-sm font-semibold text-slate-200">Smart Home & Energy</h3>
+                    </div>
+                    <span id="powerLoadBadge" class="text-xs px-2 py-0.5 rounded-full bg-amber-950/80 text-amber-400 border border-amber-800/60 font-mono font-bold">
+                        9 W Load
+                    </span>
+                </div>
+
+                <!-- Device toggles list -->
+                <div id="smartDevicesList" class="space-y-2 text-xs">
+                    <!-- Populated dynamically via JS -->
+                </div>
+
+                <div class="pt-1 flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-800/60">
+                    <span id="energyTipSummary" class="truncate pr-2">Tip: Switch off lights in empty rooms</span>
+                    <button id="refreshEnergyBtn" class="text-cyan-400 hover:underline flex items-center space-x-1 shrink-0">
+                        <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                        <span>Refresh</span>
+                    </button>
+                </div>
+            </div>
+
         </div>
 
     </main>
@@ -238,6 +275,9 @@
             </div>
         </div>
     </div>
+
+    <!-- Floating Toast Notification System -->
+    <div id="toastContainer"></div>
 
     <script src="app.js"></script>
 </body>

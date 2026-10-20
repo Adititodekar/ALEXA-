@@ -123,6 +123,22 @@ class Planner:
             })
         return deadlines
 
+    def complete_deadline(self, deadline_id: int) -> bool:
+        """Marks a deadline as completed."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE deadlines SET status = 'completed' WHERE id = ?", (deadline_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def delete_deadline(self, deadline_id: int) -> bool:
+        """Permanently removes a deadline."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM deadlines WHERE id = ?", (deadline_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
     def record_conversation_note(self, note: str):
         """Records a habit/task mentioned in conversation."""
         with self._get_connection() as conn:

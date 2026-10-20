@@ -3,6 +3,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
 # SQLite Databases & temporary files
 data/*.db
 *.sqlite3
@@ -11,6 +17,7 @@ data/*.db
 # Environment variables & secrets
 .env
 .env.*
+!.env.example
 secrets.json
 
 # IDE / Editor folders
