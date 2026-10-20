@@ -64,3 +64,12 @@ ALEXA-/
 The `mobile_android/` directory contains:
 - `NovaForegroundService.kt`: Demonstrates how to access Android `UsageStatsManager` for enforcing app limits, `FusedLocationProviderClient` for background location, and `SmsManager` / `ACTION_CALL` for emergency dispatch.
 - `AndroidManifest_Snippet.xml`: Outlines the exact permissions needed.
+
+## Gemini AI answers
+
+1. Create a Gemini API key in [Google AI Studio](https://aistudio.google.com/apikey).
+2. Copy `.env.example` to `.env` and replace `put_your_key_here` with your key. Keep `.env` private; it is ignored by Git.
+3. Install backend dependencies from the project directory: `python -m pip install -r requirements.txt`.
+4. Start Nova with `python run.py`.
+
+General questions are answered by Gemini. SOS, location, planner, and wellbeing requests continue to use Nova's dedicated handlers. The key stays in the backend and must never be put in frontend JavaScript.

@@ -234,7 +234,7 @@ function handleAssistantResponse(data) {
     }
 
     // 3. Render Assistant message and rich visual cards
-    appendAssistantMessage(data.speech_reply || data.display_reply, data);
+    appendAssistantMessage(data.display_reply || data.speech_reply || data.reply, data);
 
     // 4. Handle Emergency
     if (data.type === "emergency" || (data.mood && data.mood.is_emergency)) {
@@ -344,7 +344,7 @@ function appendAssistantMessage(text, payload) {
                 <span>Nova</span>
                 <span class="text-[10px] text-slate-500 font-mono">${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
             </div>
-            <p class="text-slate-200 leading-relaxed">${escapeHtml(text)}</p>
+            <div class="text-slate-200 leading-relaxed">${formatMarkdown(text)}</div>
             ${mediaContent}
         </div>
     `;
@@ -551,4 +551,20 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+function formatMarkdown(text) {
+    if (!text) return "";
+    let safe = escapeHtml(text);
+    // Bold: **text**
+    safe = safe.replace(/\*\*(.*?)\*\*/g, '<strong class="text-cyan-300 font-semibold">$1</strong>');
+    // Code: `code`
+    safe = safe.replace(/`([^`]+)`/g, '<code class="bg-slate-800 text-cyan-400 px-1.5 py-0.5 rounded text-xs font-mono">$1</code>');
+    // Headers: ### text
+    safe = safe.replace(/^### (.*$)/gim, '<div class="text-sm font-bold text-cyan-400 mt-2 mb-1">$1</div>');
+    // Bullet points: - text
+    safe = safe.replace(/^\s*-\s+(.*$)/gim, '<div class="flex items-start space-x-1.5 ml-2 my-0.5"><span class="text-cyan-400">•</span><span>$1</span></div>');
+    // Newlines
+    safe = safe.replace(/\n\n/g, '<div class="h-2"></div>').replace(/\n/g, '<br/>');
+    return safe;
 }

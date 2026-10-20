@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 import os
+import logging
 
 from core.brain import NovaBrain
 
@@ -59,12 +60,27 @@ async def chat_endpoint(req: ChatRequest):
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty")
     
-    response = brain.process_message(
-        user_text=req.message,
-        user_lat=req.latitude,
-        user_lng=req.longitude
-    )
-    return response
+    try:
+        return brain.process_message(
+            user_text=req.message,
+            user_lat=req.latitude,
+            user_lng=req.longitude
+        )
+    except Exception as exc:
+        logging.getLogger(__name__).exception("Chat processing encountered an issue: %s", exc)
+        fallback_speech = "I'm right here with you! What would you like to explore or do next?"
+        return {
+            "speech_reply": fallback_speech,
+            "display_reply": fallback_speech,
+            "reply": fallback_speech,
+            "mood": {"primary_mood": "calm", "is_emergency": False},
+            "type": "conversation",
+            "media": None,
+            "location": None,
+            "navigation": None,
+            "planner": None,
+            "wellbeing": None
+        }
 
 @app.post("/api/sos/trigger")
 async def sos_endpoint(req: SOSRequest):

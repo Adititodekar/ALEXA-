@@ -1,12 +1,18 @@
 """
 Core Brain & Multimodal AI Reasoner for Nova AI Assistant.
-Orchestrates conversation, tool calling, real-time media, location services, wellbeing, and SOS response.
+Orchestrates dynamic conversation, multi-turn dialogue, real-time media,
+location services, daily planning, wellbeing, and emergency SOS response.
+Operates fully offline with built-in natural dialogue, with optional Gemini enhancement.
 """
 
 import os
 import re
+import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, Any, Optional
+
+from dotenv import load_dotenv
 
 from .mood_engine import MoodEngine
 from .emergency_guardian import EmergencyGuardian
@@ -14,6 +20,10 @@ from .location_service import LocationService
 from .media_service import MediaService
 from .wellbeing_tracker import WellbeingTracker
 from .planner import Planner
+from .conversation_engine import ConversationEngine
+
+load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
+logger = logging.getLogger(__name__)
 
 class NovaBrain:
     def __init__(self):
@@ -23,24 +33,37 @@ class NovaBrain:
         self.media_service = MediaService()
         self.wellbeing = WellbeingTracker()
         self.planner = Planner()
+        self.conversation = ConversationEngine(media_service=self.media_service)
         
-        # Check for Gemini API key
-        self.gemini_key = os.environ.get("GEMINI_API_KEY", "")
-        self.has_gemini = bool(self.gemini_key)
+        # Optional Gemini API integration with safe fallback
+        self.gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
+        self.gemini_model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash").strip()
+        self.gemini_client = None
+
+        if self.gemini_key and self.gemini_key.startswith("AIza"):
+            try:
+                from google import genai
+                self.gemini_client = genai.Client(api_key=self.gemini_key)
+                logger.info("Gemini AI client initialized successfully.")
+            except Exception as exc:
+                logger.warning("Could not initialize Gemini client: %s. Using built-in conversational engine.", exc)
+                self.gemini_client = None
+        else:
+            if self.gemini_key:
+                logger.info("GEMINI_API_KEY is not a standard AI Studio key. Using built-in dynamic conversational engine.")
 
     def process_message(self, user_text: str, user_lat: Optional[float] = None, user_lng: Optional[float] = None) -> Dict[str, Any]:
         """
         Main cognitive loop:
-        1. Analyzes user mood and distress levels.
-        2. Updates location if provided.
-        3. Identifies intent (Emergency, Navigation, Planning, Wellbeing, Knowledge).
-        4. Synthesizes conversational spoken text (for Alexa-like voice) and visual cards.
+        1. Analyzes user mood, emotion, and distress levels.
+        2. Updates location coordinates if provided.
+        3. Identifies intent (Emergency, Navigation, Planning, Wellbeing, Knowledge, Chit-Chat).
+        4. Synthesizes dynamic, conversational spoken text and rich visual cards.
         """
         clean_text = user_text.strip()
         lowered = clean_text.lower()
         
         # 1. Update location coordinates if received from client
-        current_location = None
         if user_lat is not None and user_lng is not None:
             current_location = self.location_service.update_coords(user_lat, user_lng)
         else:
@@ -53,16 +76,18 @@ class NovaBrain:
         mood_data = self.mood_engine.analyze(clean_text)
 
         # 3. Emergency / SOS Detection (Highest Priority)
-        if mood_data["is_emergency"] or any(k in lowered for k in ["help me", "call police", "call ambulance", "accident", "emergency", "danger"]):
+        if mood_data.get("is_emergency") or any(k in lowered for k in ["help me", "call police", "call ambulance", "accident", "emergency", "danger"]):
             sos_res = self.guardian.trigger_sos(
                 situation_description=clean_text,
                 lat=current_location["coords"]["lat"],
                 lng=current_location["coords"]["lng"],
                 address=current_location["address"]
             )
+            speech = sos_res["speech_reply"]
             return {
-                "speech_reply": sos_res["speech_reply"],
+                "speech_reply": speech,
                 "display_reply": "🚨 EMERGENCY TRIGGERED: Coordinates and SOS signal sent to emergency contacts and emergency services.",
+                "reply": speech,
                 "mood": mood_data,
                 "type": "emergency",
                 "emergency_payload": sos_res,
@@ -79,10 +104,12 @@ class NovaBrain:
                 current_location["coords"]["lat"],
                 current_location["coords"]["lng"]
             )
-            speech = f"You are currently at {resolved['display_name']}. I have pinpointed your exact position on your map."
+            speech = self.conversation.format_location_speech(resolved["display_name"])
+            self.conversation.record_turn(clean_text, speech, topic="location")
             return {
                 "speech_reply": speech,
                 "display_reply": f"📍 **Current Location**: {resolved['display_name']}\nGPS Coordinates: `{current_location['coords']['lat']:.4f}, {current_location['coords']['lng']:.4f}`",
+                "reply": speech,
                 "mood": mood_data,
                 "type": "location",
                 "location": {
@@ -96,7 +123,6 @@ class NovaBrain:
             }
 
         if any(w in lowered for w in ["directions to", "navigate to", "how to reach", "route to", "go to"]):
-            # Extract destination
             match = re.search(r"(?:directions to|navigate to|route to|how to reach|go to)\s+(.+)", clean_text, re.IGNORECASE)
             dest = match.group(1).strip() if match else "nearest hospital"
             nav = self.location_service.get_route_and_directions(
@@ -104,13 +130,12 @@ class NovaBrain:
                 start_lat=current_location["coords"]["lat"],
                 start_lng=current_location["coords"]["lng"]
             )
-            if nav.get("success"):
-                speech = f"Heading to {dest}. It is {nav['distance_km']} kilometers away, approximately {nav['duration_min']} minutes. Showing route on your map."
-            else:
-                speech = f"I am searching for directions to {dest}."
+            speech = self.conversation.format_location_speech(dest, nav_info=nav, destination=dest)
+            self.conversation.record_turn(clean_text, speech, topic=f"route to {dest}")
             return {
                 "speech_reply": speech,
                 "display_reply": f"🧭 **Route to {dest}**\n- Distance: **{nav.get('distance_km', 'N/A')} km**\n- Estimated travel time: **{nav.get('duration_min', 'N/A')} mins**",
+                "reply": speech,
                 "mood": mood_data,
                 "type": "navigation",
                 "location": current_location,
@@ -120,13 +145,15 @@ class NovaBrain:
                 "wellbeing": None
             }
 
-        # 5. Daily Schedule & Conversation-based Day Planner
+        # 5. Daily Schedule & Day Planner
         if any(w in lowered for w in ["prepare my day", "daily plan", "my schedule", "what is my day", "plan my day", "daily agenda"]):
             plan = self.planner.generate_daily_plan()
-            speech = f"Here is your personalized daily plan for {plan['date']}. You have {plan['urgent_deadlines_count']} critical deadlines to focus on today. I have organized your focus blocks accordingly."
+            speech = self.conversation.format_planner_speech(plan)
+            self.conversation.record_turn(clean_text, speech, topic="daily plan")
             return {
                 "speech_reply": speech,
-                "display_reply": f"📅 **Daily Agenda for {plan['date']}**\nPrepared based on your recent commitments and active deadlines.",
+                "display_reply": f"📅 **Daily Agenda for {plan['date']}**\n{speech}",
+                "reply": speech,
                 "mood": mood_data,
                 "type": "planner",
                 "planner": plan,
@@ -138,21 +165,21 @@ class NovaBrain:
 
         # 6. Deadlines and Submission reminders
         if any(w in lowered for w in ["deadline", "submission", "remind me to submit", "assignment due", "project due", "my deadlines"]):
-            # Check if adding a deadline
+            added_title = None
             if any(k in lowered for k in ["add", "remind me", "due on", "due tomorrow", "due at"]):
                 title_match = re.search(r"(?:remind me to submit|add deadline for|submit)\s+([^,]+)", clean_text, re.IGNORECASE)
                 item_title = title_match.group(1).strip() if title_match else "Submission task"
-                # Add sample deadline for tomorrow
                 tomorrow_str = (datetime.now()).strftime("%Y-%m-%d 18:00")
-                new_d = self.planner.add_deadline(item_title, tomorrow_str, priority="high")
-                speech = f"Recorded! I added '{item_title}' to your submission tracker and will remind you before the deadline."
-            else:
-                speech = "Here are your active submission deadlines. Make sure to complete high-priority items on time."
+                self.planner.add_deadline(item_title, tomorrow_str, priority="high")
+                added_title = item_title
 
             deadlines_list = self.planner.get_deadlines()
+            speech = self.conversation.format_deadlines_speech(deadlines_list, added_title=added_title)
+            self.conversation.record_turn(clean_text, speech, topic="deadlines")
             return {
                 "speech_reply": speech,
-                "display_reply": "📋 **Submission Tracker & Deadlines**",
+                "display_reply": f"📋 **Submission Tracker**\n{speech}",
+                "reply": speech,
                 "mood": mood_data,
                 "type": "deadlines",
                 "deadlines": deadlines_list,
@@ -165,17 +192,20 @@ class NovaBrain:
 
         # 7. Screen Time & Digital Wellbeing Control
         if any(w in lowered for w in ["screen time", "phone limit", "phone usage", "app limit", "digital wellbeing", "lock my phone", "focus mode"]):
-            if "focus mode" in lowered or "lock" in lowered:
-                status_msg = self.wellbeing.toggle_focus_mode(True)
-                speech = "Focus mode is now active. I am limiting recreational apps so you can stay productive."
+            is_focus_toggle = ("focus mode" in lowered or "lock" in lowered)
+            if is_focus_toggle:
+                self.wellbeing.toggle_focus_mode(True)
+                wb_summary = self.wellbeing.get_summary()
+                speech = self.conversation.format_wellbeing_speech(wb_summary, toggled_focus=True)
             else:
-                wb = self.wellbeing.get_summary()
-                speech = f"Your total screen time today is {wb['total_screen_time_formatted']}. You have used {wb['percent_used']} percent of your daily limit."
+                wb_summary = self.wellbeing.get_summary()
+                speech = self.conversation.format_wellbeing_speech(wb_summary)
 
-            wb_summary = self.wellbeing.get_summary()
+            self.conversation.record_turn(clean_text, speech, topic="wellbeing")
             return {
                 "speech_reply": speech,
-                "display_reply": f"📱 **Digital Wellbeing Report**\nScreen time: **{wb_summary['total_screen_time_formatted']}** / Daily Goal: **{wb_summary['daily_limit_mins']}m**",
+                "display_reply": f"📱 **Digital Wellbeing Report**\nScreen time: **{wb_summary['total_screen_time_formatted']}** / Daily Goal: **{wb_summary['daily_limit_mins']}m**\n\n{speech}",
+                "reply": speech,
                 "mood": mood_data,
                 "type": "wellbeing",
                 "wellbeing": wb_summary,
@@ -185,34 +215,52 @@ class NovaBrain:
                 "planner": None
             }
 
-        # 8. General Knowledge, Real-Time Information, Images & Videos
-        # Query MediaService for factual data, real images, and video explanations
-        media = self.media_service.fetch_knowledge_and_media(clean_text)
-        
-        # Check if user is asking for images specifically
+        # 8. Real Conversational Intelligence & Knowledge Synthesis
+        # Try Gemini if configured and working; otherwise seamlessly use built-in ConversationEngine
+        speech = None
+        display_reply = None
+        topic = None
+
+        if self.gemini_client:
+            try:
+                prompt = (
+                    "You are Nova, an intelligent, empathetic voice AI assistant. "
+                    "Provide a helpful, conversational, natural answer in 2 to 4 sentences. "
+                    f"User: {clean_text}"
+                )
+                res = self.gemini_client.models.generate_content(
+                    model=self.gemini_model,
+                    contents=prompt
+                )
+                if res and res.text:
+                    speech = res.text.strip()
+                    display_reply = speech
+                    self.conversation.record_turn(clean_text, speech)
+            except Exception as exc:
+                logger.info("Gemini provider unavailable (%s). Using built-in conversational engine.", exc)
+                speech = None
+
+        # If Gemini is not configured or didn't respond, use our dynamic ConversationEngine
+        if not speech:
+            conv_res = self.conversation.generate_response(clean_text, mood_data, current_location)
+            speech = conv_res["speech"]
+            display_reply = conv_res.get("display", speech)
+            topic = conv_res.get("topic")
+
+        # Visual Media & Explainer Cards
+        search_query = topic if topic and topic not in ["chit-chat", "greeting", "fallback", "profile", "math", "time"] else clean_text
+        media = self.media_service.fetch_knowledge_and_media(search_query)
         needs_media = any(w in lowered for w in ["show me", "image", "picture", "video", "photo", "what is", "who is", "explain", "tell me about", "look like"])
         
-        # Conversational speech formulation
-        if media.get("summary"):
-            short_summary = media["summary"].split(". ")[0] + "."
-            speech = f"{short_summary} I have also loaded relevant real images and videos on your screen."
-        else:
-            mood_tone = mood_data["primary_mood"]
-            if mood_tone == "stressed":
-                speech = "I hear you, and it sounds like things are heavy right now. Take a deep breath. How can I help you tackle your tasks or organize your day?"
-            elif mood_tone == "sad":
-                speech = "I'm right here with you. Remember to take things one small step at a time. I can adjust your schedule or play something relaxing."
-            elif mood_tone == "joyful":
-                speech = "That's wonderful to hear! Love the positive energy. What would you like to do next?"
-            else:
-                speech = f"I've got you covered regarding {clean_text}. Here is what you need to know, along with visual details."
+        has_media = bool(media.get("primary_image") or (needs_media and media.get("videos")))
 
         return {
             "speech_reply": speech,
-            "display_reply": media.get("summary") or f"Information and assistance ready for: '{clean_text}'.",
+            "display_reply": display_reply,
+            "reply": speech,
             "mood": mood_data,
-            "type": "knowledge",
-            "media": media if (media.get("primary_image") or needs_media) else None,
+            "type": "knowledge" if has_media else "conversation",
+            "media": media if has_media else None,
             "location": current_location,
             "navigation": None,
             "planner": None,
