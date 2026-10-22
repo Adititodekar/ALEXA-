@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NOVA - Next-Gen Multimodal AI Assistant</title>
+    <title>NOVA AI — ALEXA-NEXT 2.0 | Autonomous Multimodal Assistant</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
@@ -15,61 +15,131 @@
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans selection:bg-cyan-500 selection:text-black">
 
-    <!-- Top Navigation Bar -->
-    <header class="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md sticky top-0 z-50 px-6 py-3 flex items-center justify-between">
+    <!-- Top Global Header -->
+    <header class="border-b border-slate-800/80 bg-slate-900/80 backdrop-blur-md sticky top-0 z-50 px-4 md:px-6 py-2.5 flex items-center justify-between">
         <div class="flex items-center space-x-3">
-            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
-                <i data-lucide="bot" class="w-6 h-6 text-white"></i>
+            <button id="mobileSidebarToggle" class="p-2 rounded-xl bg-slate-800 text-slate-300 md:hidden hover:text-white">
+                <i data-lucide="menu" class="w-5 h-5"></i>
+            </button>
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                <i data-lucide="bot" class="w-5 h-5 text-white"></i>
             </div>
             <div>
                 <div class="flex items-center space-x-2">
-                    <h1 class="text-lg font-bold tracking-tight text-white">NOVA AI</h1>
-                    <span class="px-2 py-0.5 text-xs rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800/60 font-mono">ALEXA-NEXT 2.0</span>
+                    <h1 class="text-base md:text-lg font-bold tracking-tight text-white">NOVA AI</h1>
+                    <span class="px-2 py-0.5 text-[10px] rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800/60 font-mono font-semibold">ALEXA-NEXT 2.0</span>
                 </div>
-                <p class="text-xs text-slate-400">Autonomous Multimodal Voice & Life Guardian</p>
+                <p class="text-[11px] text-slate-400 hidden sm:block">Autonomous Multimodal Assistant & Life Guardian</p>
             </div>
         </div>
 
-        <!-- Live Status Indicators -->
-        <div class="flex items-center space-x-4">
-            <!-- Mood Badge -->
-            <div id="moodBadge" class="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700 text-xs">
-                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span id="moodText" class="text-slate-300">Mood: Calm & Attentive</span>
-            </div>
-
+        <!-- Global Status Indicators -->
+        <div class="flex items-center space-x-2 sm:space-x-4">
             <!-- GPS Status -->
-            <div id="gpsStatus" class="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700 text-xs text-slate-300">
+            <div id="gpsStatus" class="hidden md:flex items-center space-x-1.5 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700 text-xs text-slate-300">
                 <i data-lucide="navigation" class="w-3.5 h-3.5 text-cyan-400"></i>
                 <span id="gpsLocationText">GPS: Detecting...</span>
             </div>
 
-            <!-- Big Red SOS Trigger Button -->
-            <button id="sosBtn" class="flex items-center space-x-2 px-4 py-1.5 rounded-full bg-red-600 hover:bg-red-500 active:scale-95 transition-all text-white font-semibold text-xs shadow-lg shadow-red-600/30">
+            <!-- Red SOS Emergency Button -->
+            <button id="sosBtn" class="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full bg-red-600 hover:bg-red-500 active:scale-95 transition text-white font-semibold text-xs shadow-lg shadow-red-600/30">
                 <i data-lucide="shield-alert" class="w-4 h-4"></i>
-                <span>SOS EMERGENCY</span>
+                <span>SOS</span>
             </button>
         </div>
     </header>
 
-    <!-- Main Content Grid -->
-    <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <!-- Main Application Layout (Sidebar + Main Area + Command Center) -->
+    <div class="flex-1 flex overflow-hidden">
 
-        <!-- Left / Center: Interactive Voice Chat & Multimodal Display (7 Cols) -->
-        <div class="lg:col-span-7 flex flex-col space-y-4">
-            
-            <!-- Voice Orb & Alexa Visualizer Box -->
-            <div class="relative overflow-hidden rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 p-6 flex flex-col items-center justify-center text-center shadow-2xl min-h-[220px]">
+        <!-- ===================================================================== -->
+        <!-- A. LEFT / NAVIGATION AREA (Sidebar)                                  -->
+        <!-- ===================================================================== -->
+        <aside id="sidebarNav" class="w-64 bg-slate-900/95 border-r border-slate-800/90 flex flex-col justify-between p-3.5 shrink-0 z-40 md:relative fixed inset-y-0 left-0 transform -translate-x-full md:translate-x-0 transition-transform duration-200 ease-in-out">
+            <div class="space-y-4 overflow-y-auto pr-1">
+                <!-- New Chat Button -->
+                <button id="newChatBtn" class="w-full flex items-center justify-center space-x-2 py-2 px-3 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-medium text-xs shadow-md shadow-cyan-600/20 transition">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                    <span>New Conversation</span>
+                </button>
+
+                <!-- Navigation Tabs -->
+                <div class="space-y-1">
+                    <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-2 pt-1">Capabilities</div>
+                    <button id="navTabChat" class="nav-tab-btn w-full active" data-tab="chat">
+                        <i data-lucide="message-square" class="w-4 h-4 text-cyan-400"></i>
+                        <span>Conversation</span>
+                    </button>
+                    <button id="navTabWeather" class="nav-tab-btn w-full" data-tab="weather">
+                        <i data-lucide="cloud-sun" class="w-4 h-4 text-sky-400"></i>
+                        <span>Weather & Surroundings</span>
+                    </button>
+                    <button id="navTabMusic" class="nav-tab-btn w-full" data-tab="music">
+                        <i data-lucide="music" class="w-4 h-4 text-pink-400"></i>
+                        <span>Music Player</span>
+                    </button>
+                    <button id="navTabAlarms" class="nav-tab-btn w-full" data-tab="alarms">
+                        <i data-lucide="alarm-clock" class="w-4 h-4 text-amber-400"></i>
+                        <span>Smart Alarms & Timers</span>
+                    </button>
+                    <button id="navTabBriefing" class="nav-tab-btn w-full" data-tab="briefing">
+                        <i data-lucide="newspaper" class="w-4 h-4 text-emerald-400"></i>
+                        <span>Daily Briefing & News</span>
+                    </button>
+                    <button id="navTabPlanner" class="nav-tab-btn w-full" data-tab="planner">
+                        <i data-lucide="calendar-check" class="w-4 h-4 text-indigo-400"></i>
+                        <span>Tasks & Deadlines</span>
+                    </button>
+                    <button id="navTabSmarthome" class="nav-tab-btn w-full" data-tab="smarthome">
+                        <i data-lucide="zap" class="w-4 h-4 text-amber-300"></i>
+                        <span>Smart Home IoT</span>
+                    </button>
+                    <button id="navTabMemory" class="nav-tab-btn w-full" data-tab="memory">
+                        <i data-lucide="brain-circuit" class="w-4 h-4 text-fuchsia-400"></i>
+                        <span>Memory & Twin</span>
+                    </button>
+                    <button id="navTabKnowledge" class="nav-tab-btn w-full" data-tab="knowledge">
+                        <i data-lucide="folder-archive" class="w-4 h-4 text-teal-400"></i>
+                        <span>Knowledge & Files</span>
+                    </button>
+                </div>
+
+                <!-- Saved Conversations List -->
+                <div class="space-y-1.5 pt-2 border-t border-slate-800/80">
+                    <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-2">Recent Threads</div>
+                    <div id="conversationsList" class="space-y-1 text-xs max-h-36 overflow-y-auto pr-1">
+                        <!-- Populated dynamically via JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Settings Trigger -->
+            <div class="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+                <button id="openSettingsBtn" class="flex items-center space-x-2 hover:text-white transition">
+                    <i data-lucide="settings" class="w-4 h-4"></i>
+                    <span>Settings & Audio</span>
+                </button>
+                <span class="text-[10px] text-slate-500 font-mono">v2.0</span>
+            </div>
+        </aside>
+
+        <!-- ===================================================================== -->
+        <!-- B. MAIN CONVERSATION & MISSION AREA (Center)                         -->
+        <!-- ===================================================================== -->
+        <main class="flex-1 flex flex-col overflow-y-auto p-4 md:p-6 space-y-4 max-w-5xl mx-auto w-full">
+
+            <!-- 1. Voice Orb & Animated Alexa Eye Visualizer -->
+            <div class="relative overflow-hidden rounded-2xl bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border border-slate-800 p-5 flex flex-col items-center justify-center text-center shadow-2xl">
                 <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(6,182,212,0.12)_0,transparent_70%)] pointer-events-none"></div>
 
-                <!-- Glowing Animated Alexa Eye Core -->
-                <div id="voiceOrb" class="state-idle mb-4" title="Click to speak with Nova">
+                <!-- 8-State Animated Alexa Eye Core -->
+                <div id="voiceOrb" class="state-idle mb-3" title="Click to speak with NOVA">
                     <div class="eye-aura"></div>
                     <div class="eye-orbit-ring"></div>
                     <div class="eye-iris">
                         <div class="eye-core">
                             <div class="eye-pupil-glow"></div>
-                            <i id="orbIcon" data-lucide="mic" class="w-8 h-8 text-cyan-300 z-10 transition-transform"></i>
+                            <i id="orbIcon" data-lucide="mic" class="w-7 h-7 text-cyan-300 z-10 transition-transform"></i>
                             <div class="eye-wave-bars">
                                 <div class="eye-bar"></div>
                                 <div class="eye-bar"></div>
@@ -79,166 +149,288 @@
                             </div>
                         </div>
                     </div>
-                    <!-- Audio Wave Rings (Active when speaking/listening) -->
+                    <!-- Audio Wave Rings -->
                     <div id="waveRing1" class="absolute inset-0 rounded-full border-2 border-cyan-400/40 opacity-0 scale-100 pointer-events-none"></div>
                     <div id="waveRing2" class="absolute inset-0 rounded-full border-2 border-indigo-400/30 opacity-0 scale-100 pointer-events-none"></div>
                 </div>
 
-                <h2 id="assistantStatus" class="text-sm font-medium text-slate-300 tracking-wide uppercase">Click Eye or Speak "Hey Nova"</h2>
-                <p id="assistantSubtext" class="text-xs text-slate-500 mt-1">Talk naturally • Real-time images & video • Smart Home • Deadline tracking</p>
-                
-                <!-- Quick Suggestion Pills -->
-                <div class="flex flex-wrap items-center justify-center gap-2 mt-4">
-                    <button class="suggestion-pill text-xs px-3 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition" onclick="quickAsk('Where am I and how do I reach the nearest metro?')">📍 Where am I?</button>
-                    <button class="suggestion-pill text-xs px-3 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition" onclick="quickAsk('Prepare my day based on my deadlines and meetings')">📅 Prepare My Day</button>
-                    <button class="suggestion-pill text-xs px-3 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition" onclick="quickAsk('Show me real images and videos of the James Webb Space Telescope')">🔭 James Webb Images</button>
-                    <button class="suggestion-pill text-xs px-3 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition" onclick="quickAsk('Turn on the living room light and show energy usage')">💡 Smart Home & Energy</button>
-                    <button class="suggestion-pill text-xs px-3 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition" onclick="quickAsk('What are my phone usage limits and screen time?')">📱 Screen Time</button>
+                <h2 id="assistantStatus" class="text-xs font-semibold text-slate-300 tracking-wider uppercase">Click Eye or Speak "Hey Nova"</h2>
+                <p id="assistantSubtext" class="text-[11px] text-slate-500 mt-1">Talk naturally • Multimodal vision & files • Autonomous Missions • Smart Home IoT</p>
+
+                <!-- Quick Action Pills -->
+                <div class="flex flex-wrap items-center justify-center gap-1.5 mt-3.5">
+                    <button class="text-xs px-2.5 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition flex items-center space-x-1" onclick="quickAsk('What is the surrounding temperature and humidity?')">
+                        <span>⛅</span>
+                        <span>Surrounding Weather</span>
+                    </button>
+                    <button class="text-xs px-2.5 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-pink-300 border border-pink-700/40 transition flex items-center space-x-1" onclick="quickAsk('NOVA ! PLAY MY FAVOURITE SONGS!')">
+                        <span>🎵</span>
+                        <span>Play Favourite Songs</span>
+                    </button>
+                    <button class="text-xs px-2.5 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-amber-300 border border-amber-700/40 transition flex items-center space-x-1" onclick="quickAsk('Set a timer for 5 minutes')">
+                        <span>⏱️</span>
+                        <span>5-Min Timer</span>
+                    </button>
+                    <button class="text-xs px-2.5 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-emerald-300 border border-emerald-700/40 transition flex items-center space-x-1" onclick="quickAsk('Give me my daily briefing and news')">
+                        <span>📰</span>
+                        <span>Daily Briefing</span>
+                    </button>
+                    <button class="text-xs px-2.5 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition flex items-center space-x-1" onclick="quickAsk('Turn on the bedroom fan')">
+                        <span>💡</span>
+                        <span>Smart Home</span>
+                    </button>
+                    <button class="text-xs px-2.5 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition flex items-center space-x-1" onclick="quickAsk('Where am I?')">
+                        <span>📍</span>
+                        <span>Location</span>
+                    </button>
                 </div>
             </div>
 
-            <!-- Conversational Stream & Multimodal Cards -->
-            <div id="chatFeed" class="flex-1 overflow-y-auto space-y-4 max-h-[500px] pr-2 scrollbar-thin">
+            <!-- 2. Conversational Message Feed -->
+            <div id="chatFeed" class="flex-1 overflow-y-auto space-y-3.5 min-h-[300px] max-h-[500px] pr-2 scrollbar-thin">
                 <!-- Welcome Assistant Message -->
-                <div class="flex items-start space-x-3 bg-slate-900/70 border border-slate-800 p-4 rounded-2xl">
+                <div class="flex items-start space-x-3 bg-slate-900/80 border border-slate-800 p-4 rounded-2xl">
                     <div class="w-8 h-8 rounded-lg bg-cyan-600/20 text-cyan-400 flex items-center justify-center shrink-0">
                         <i data-lucide="sparkles" class="w-4 h-4"></i>
                     </div>
                     <div class="text-sm space-y-2 flex-1">
-                        <div class="font-semibold text-cyan-400">Nova Assistant</div>
+                        <div class="font-semibold text-cyan-400 flex items-center justify-between">
+                            <span>Nova Assistant</span>
+                            <span class="text-[10px] text-slate-500 font-mono">Conversational AI Ready</span>
+                        </div>
                         <p class="text-slate-300 leading-relaxed">
-                            Hello! I am your real-time voice and multimodal AI assistant. You can speak to me or type anytime. I monitor your daily schedule, keep your submission deadlines on track, provide real images and videos, guide your location if you're lost, supervise phone usage limits, and protect you with instant emergency SOS.
+                            Hello! I am **NOVA AI — ALEXA-NEXT 2.0**, your conversational personal assistant. I can chat naturally with you, tell you the real-time surrounding temperature and humidity, play your favourite songs, set smart alarms and countdown timers, deliver your daily news briefing, and actively control your smart home. What can I help you with today?
                         </p>
                     </div>
                 </div>
             </div>
 
-            <!-- Bottom Input Bar -->
-            <form id="chatForm" class="flex items-center space-x-2 bg-slate-900/90 border border-slate-800 p-2 rounded-2xl focus-within:border-cyan-500 transition">
-                <button type="button" id="micBtn" class="p-2.5 rounded-xl bg-slate-800 hover:bg-cyan-600 hover:text-white text-cyan-400 transition" title="Start Voice Dictation">
-                    <i data-lucide="mic" class="w-5 h-5"></i>
+            <!-- Upload Preview Chip (Hidden until user selects file) -->
+            <div id="uploadPreviewChip" class="hidden items-center justify-between bg-slate-900 border border-cyan-500/50 p-2 rounded-xl text-xs">
+                <div class="flex items-center space-x-2 truncate">
+                    <i data-lucide="file-text" class="w-4 h-4 text-cyan-400 shrink-0"></i>
+                    <span id="uploadFileName" class="text-slate-200 truncate">assignment.pdf</span>
+                    <span id="uploadFileSize" class="text-slate-500 text-[10px]">1.2 MB</span>
+                </div>
+                <button id="cancelUploadBtn" class="text-slate-400 hover:text-red-400">
+                    <i data-lucide="x" class="w-4 h-4"></i>
                 </button>
-                <input type="text" id="userInput" placeholder="Ask anything, say 'help me', 'where am I', 'show me photos of mars'..." class="flex-1 bg-transparent text-sm text-slate-100 placeholder-slate-500 focus:outline-none px-2" autocomplete="off">
+            </div>
+
+            <!-- 4. Bottom Input Bar with File Upload and Voice -->
+            <form id="chatForm" class="flex items-center space-x-2 bg-slate-900/90 border border-slate-800 p-2 rounded-2xl focus-within:border-cyan-500 transition shadow-xl">
+                <!-- Hidden File Input -->
+                <input type="file" id="fileInput" class="hidden" accept=".png,.jpg,.jpeg,.webp,.pdf,.txt,.md">
+
+                <!-- Upload Attachment Button -->
+                <button type="button" id="uploadBtn" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-cyan-400 transition" title="Upload assignment brief, PDF, or screenshot">
+                    <i data-lucide="paperclip" class="w-4 h-4"></i>
+                </button>
+
+                <!-- Voice Dictation Button -->
+                <button type="button" id="micBtn" class="p-2.5 rounded-xl bg-slate-800 hover:bg-cyan-600 hover:text-white text-cyan-400 transition" title="Start Voice Dictation">
+                    <i data-lucide="mic" class="w-4 h-4"></i>
+                </button>
+
+                <!-- Text Input Field -->
+                <input type="text" id="userInput" placeholder="Ask Nova, upload assignments, say 'plan my week', 'where am I'..." class="flex-1 bg-transparent text-sm text-slate-100 placeholder-slate-500 focus:outline-none px-2" autocomplete="off">
+
+                <!-- Interrupt/Stop Speaking Button -->
+                <button type="button" id="stopSpeechBtn" class="hidden p-2 rounded-xl bg-slate-800 hover:bg-red-600 text-slate-300 hover:text-white transition" title="Stop Speaking">
+                    <i data-lucide="volume-x" class="w-4 h-4"></i>
+                </button>
+
+                <!-- Send Button -->
                 <button type="submit" class="p-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white transition flex items-center justify-center shadow-md shadow-cyan-600/30">
                     <i data-lucide="send" class="w-4 h-4"></i>
                 </button>
             </form>
-        </div>
+        </main>
 
-        <!-- Right Side: Live GPS Map, Deadlines & Digital Wellbeing (5 Cols) -->
-        <div class="lg:col-span-5 flex flex-col space-y-6">
+        <!-- ===================================================================== -->
+        <!-- C. RIGHT / COMMAND CENTER (Context, Deadlines, IoT, GPS)             -->
+        <!-- ===================================================================== -->
+        <aside class="w-80 lg:w-96 bg-slate-900/60 border-l border-slate-800/80 p-4 space-y-4 overflow-y-auto hidden xl:flex flex-col shrink-0">
 
-            <!-- 1. Live GPS Location & Directions Map -->
-            <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col space-y-3">
+            <!-- 0A. Live Weather & Environmental Card -->
+            <div id="weatherCard" class="glass-panel p-3.5 border-sky-500/30 space-y-2.5 bg-gradient-to-br from-slate-900/90 to-sky-950/20">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-1.5">
+                        <i data-lucide="cloud-sun" class="w-4 h-4 text-sky-400"></i>
+                        <h3 class="text-xs font-bold text-sky-300 uppercase tracking-wide">Surrounding Climate</h3>
+                    </div>
+                    <button id="refreshWeatherBtn" class="text-slate-400 hover:text-sky-300 p-1" title="Refresh Live Weather">
+                        <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                    </button>
+                </div>
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="flex items-baseline space-x-1">
+                            <span id="weatherTemp" class="text-2xl font-black text-white font-mono">--°C</span>
+                            <span id="weatherFeelsLike" class="text-[10px] text-slate-400 font-mono">Feels --°C</span>
+                        </div>
+                        <p id="weatherCondition" class="text-xs font-medium text-sky-200">Detecting surroundings...</p>
+                        <p id="weatherCity" class="text-[10px] text-slate-500">Local Area</p>
+                    </div>
+                    <div class="text-right space-y-1">
+                        <div class="px-2 py-0.5 rounded-full bg-sky-950/80 border border-sky-800 text-[10px] font-mono text-sky-300 flex items-center space-x-1">
+                            <i data-lucide="droplets" class="w-3 h-3 text-sky-400"></i>
+                            <span id="weatherHumidity">Humidity --%</span>
+                        </div>
+                        <div class="text-[10px] text-slate-400 font-mono" id="weatherWind">Wind: -- m/s</div>
+                    </div>
+                </div>
+                <!-- Humidity Bar -->
+                <div class="space-y-1 pt-1 border-t border-slate-800/60">
+                    <div class="flex justify-between text-[10px] text-slate-400">
+                        <span>Relative Humidity</span>
+                        <span id="weatherHumidityLabel" class="text-sky-400 font-mono">--%</span>
+                    </div>
+                    <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                        <div id="weatherHumidityBar" class="bg-gradient-to-r from-sky-500 to-indigo-500 h-1.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 0B. Music & Entertainment Mini Player -->
+            <div id="miniMusicPlayer" class="glass-panel p-3.5 border-pink-500/30 space-y-2.5 bg-gradient-to-br from-slate-900/90 to-pink-950/20">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-1.5">
+                        <i data-lucide="music" class="w-4 h-4 text-pink-400"></i>
+                        <h3 class="text-xs font-bold text-pink-300 uppercase tracking-wide">Favourite Songs Player</h3>
+                    </div>
+                    <span id="playerPlayingBadge" class="text-[9px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono">
+                        Ready
+                    </span>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <img id="playerCoverArt" src="https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=400&auto=format&fit=crop&q=80" alt="Cover" class="w-12 h-12 rounded-xl object-cover border border-slate-800 shadow-md">
+                    <div class="flex-1 min-w-0">
+                        <h4 id="playerTrackTitle" class="text-xs font-bold text-white truncate">Midnight Chill Lofi Beats</h4>
+                        <p id="playerArtist" class="text-[10px] text-pink-300/80 truncate">Nova Sonic Vibes</p>
+                        <p id="playerAlbum" class="text-[9px] text-slate-500 truncate">Deep Work & Focus Vol. 1</p>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between pt-1">
+                    <div class="flex items-center space-x-1">
+                        <button id="prevTrackBtn" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition" title="Previous Track">
+                            <i data-lucide="skip-back" class="w-3.5 h-3.5"></i>
+                        </button>
+                        <button id="playPauseTrackBtn" class="p-2 rounded-xl bg-pink-600 hover:bg-pink-500 text-white shadow-lg shadow-pink-600/30 transition flex items-center justify-center" title="Play/Pause">
+                            <i id="playPauseIcon" data-lucide="play" class="w-4 h-4"></i>
+                        </button>
+                        <button id="nextTrackBtn" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition" title="Next Track">
+                            <i data-lucide="skip-forward" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                    <div class="flex items-center space-x-1 text-[10px] text-slate-400">
+                        <i data-lucide="volume-2" class="w-3 h-3 text-pink-400"></i>
+                        <input type="range" id="playerVolume" min="0" max="1" step="0.05" value="0.75" class="w-16 accent-pink-500 h-1 bg-slate-800 rounded">
+                    </div>
+                </div>
+                <audio id="novaAudioPlayer" src="https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3" preload="none"></audio>
+            </div>
+
+            <!-- 1. Proactive Insights Banner -->
+            <div id="proactiveCard" class="glass-panel p-3.5 border-indigo-500/30 space-y-2">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-1.5">
+                        <i data-lucide="sparkles" class="w-4 h-4 text-indigo-400"></i>
+                        <h3 class="text-xs font-bold text-indigo-300 uppercase tracking-wide">Proactive Life Insight</h3>
+                    </div>
+                    <button id="refreshInsightsBtn" class="text-slate-400 hover:text-indigo-300">
+                        <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                    </button>
+                </div>
+                <div id="proactiveContent" class="text-xs text-slate-300 space-y-1">
+                    <p class="font-medium text-slate-200">Evaluating workload...</p>
+                </div>
+            </div>
+
+            <!-- 2. Live GPS & Leaflet Navigation Map -->
+            <div class="glass-panel p-3.5 space-y-2.5">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center space-x-2">
                         <i data-lucide="map-pin" class="w-4 h-4 text-cyan-400"></i>
-                        <h3 class="text-sm font-semibold text-slate-200">Live GPS & Navigation</h3>
+                        <h3 class="text-xs font-semibold text-slate-200">Live GPS & Navigation</h3>
                     </div>
-                    <button id="recenterMapBtn" class="text-xs text-cyan-400 hover:underline flex items-center space-x-1">
-                        <i data-lucide="locate-fixed" class="w-3.5 h-3.5"></i>
+                    <button id="recenterMapBtn" class="text-[11px] text-cyan-400 hover:underline flex items-center space-x-1">
+                        <i data-lucide="locate-fixed" class="w-3 h-3"></i>
                         <span>Recenter</span>
                     </button>
                 </div>
-
-                <!-- Leaflet Map Container -->
-                <div id="map" class="w-full h-44 rounded-xl border border-slate-800 z-10"></div>
-                <div id="locationAddressLabel" class="text-xs text-slate-400 bg-slate-950/70 p-2 rounded-lg border border-slate-800/80 truncate">
+                <div id="map" class="w-full h-36 rounded-xl border border-slate-800 z-10"></div>
+                <div id="locationAddressLabel" class="text-[11px] text-slate-400 bg-slate-950/70 p-2 rounded-lg border border-slate-800/80 truncate">
                     Detecting current street address...
                 </div>
             </div>
 
-            <!-- 2. Daily Agenda & Submission Deadlines -->
-            <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col space-y-3">
+            <!-- 3. Submission Deadlines & Tasks -->
+            <div class="glass-panel p-3.5 space-y-2.5">
                 <div class="flex items-center justify-between">
-                    <div class="flex items-center space-x-2">
+                    <div class="flex items-center space-x-1.5">
                         <i data-lucide="calendar-clock" class="w-4 h-4 text-indigo-400"></i>
-                        <h3 class="text-sm font-semibold text-slate-200">Deadlines & Day Schedule</h3>
+                        <h3 class="text-xs font-semibold text-slate-200">Deadlines & Tasks</h3>
                     </div>
-                    <button id="addDeadlineBtn" class="text-xs bg-indigo-600/30 text-indigo-300 hover:bg-indigo-600/50 px-2.5 py-1 rounded-lg border border-indigo-500/40">
-                        + Add Deadline
+                    <button id="addDeadlineBtn" class="text-[11px] bg-indigo-600/30 text-indigo-300 hover:bg-indigo-600/50 px-2 py-0.5 rounded-lg border border-indigo-500/40">
+                        + Add Task
                     </button>
                 </div>
-
-                <!-- Deadlines List -->
-                <div id="deadlinesList" class="space-y-2 max-h-36 overflow-y-auto pr-1 text-xs">
-                    <div class="p-2 rounded-lg bg-slate-950/60 border border-slate-800/80 flex items-center justify-between">
-                        <div>
-                            <p class="font-medium text-slate-200">AI Machine Learning Project Submission</p>
-                            <span class="text-[10px] text-amber-400 font-mono">Due Tomorrow (5:00 PM)</span>
-                        </div>
-                        <span class="px-2 py-0.5 rounded-full bg-amber-950 text-amber-400 border border-amber-800/60 text-[10px]">High</span>
-                    </div>
+                <div id="deadlinesList" class="space-y-1.5 max-h-36 overflow-y-auto pr-1 text-xs">
+                    <!-- Populated dynamically via JS -->
                 </div>
             </div>
 
-            <!-- 3. Phone Usage Limits & Digital Wellbeing -->
-            <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col space-y-3">
+            <!-- 4. Smart Home IoT & Energy Power Draw -->
+            <div class="glass-panel p-3.5 space-y-2.5">
                 <div class="flex items-center justify-between">
-                    <div class="flex items-center space-x-2">
-                        <i data-lucide="smartphone" class="w-4 h-4 text-emerald-400"></i>
-                        <h3 class="text-sm font-semibold text-slate-200">Phone Usage & Screen Limits</h3>
-                    </div>
-                    <button id="focusModeToggle" class="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 hover:text-white border border-slate-700">
-                        Focus Mode: OFF
-                    </button>
-                </div>
-
-                <!-- Screen time progress -->
-                <div class="space-y-1.5">
-                    <div class="flex justify-between text-xs">
-                        <span class="text-slate-400">Today's Screen Time</span>
-                        <span id="screenTimeCount" class="font-bold text-emerald-400">2h 47m / 3h Limit</span>
-                    </div>
-                    <div class="w-full bg-slate-800 rounded-full h-2">
-                        <div id="screenTimeBar" class="bg-gradient-to-r from-emerald-500 to-amber-500 h-2 rounded-full" style="width: 82%"></div>
-                    </div>
-                </div>
-
-                <!-- App consumption bars -->
-                <div class="grid grid-cols-2 gap-2 text-[11px] pt-1">
-                    <div class="p-2 rounded-lg bg-slate-950/60 border border-slate-800">
-                        <div class="flex justify-between text-slate-400"><span>Instagram</span><span class="text-amber-400 font-bold">42m / 45m</span></div>
-                        <div class="w-full bg-slate-800 h-1.5 rounded-full mt-1"><div class="bg-amber-400 h-1.5 rounded-full" style="width: 93%"></div></div>
-                    </div>
-                    <div class="p-2 rounded-lg bg-slate-950/60 border border-slate-800">
-                        <div class="flex justify-between text-slate-400"><span>YouTube</span><span class="text-emerald-400 font-bold">55m / 60m</span></div>
-                        <div class="w-full bg-slate-800 h-1.5 rounded-full mt-1"><div class="bg-emerald-400 h-1.5 rounded-full" style="width: 91%"></div></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 4. Smart Home IoT & Energy Monitor (MCP Tools & Simulated Devices) -->
-            <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col space-y-3">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center space-x-2">
+                    <div class="flex items-center space-x-1.5">
                         <i data-lucide="zap" class="w-4 h-4 text-amber-400"></i>
-                        <h3 class="text-sm font-semibold text-slate-200">Smart Home & Energy</h3>
+                        <h3 class="text-xs font-semibold text-slate-200">Smart Home IoT</h3>
                     </div>
-                    <span id="powerLoadBadge" class="text-xs px-2 py-0.5 rounded-full bg-amber-950/80 text-amber-400 border border-amber-800/60 font-mono font-bold">
+                    <span id="powerLoadBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-amber-950 text-amber-400 border border-amber-800/60 font-mono font-bold">
                         9 W Load
                     </span>
                 </div>
-
-                <!-- Device toggles list -->
-                <div id="smartDevicesList" class="space-y-2 text-xs">
+                <div id="smartDevicesList" class="space-y-1.5 text-xs">
                     <!-- Populated dynamically via JS -->
                 </div>
-
-                <div class="pt-1 flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-800/60">
-                    <span id="energyTipSummary" class="truncate pr-2">Tip: Switch off lights in empty rooms</span>
-                    <button id="refreshEnergyBtn" class="text-cyan-400 hover:underline flex items-center space-x-1 shrink-0">
-                        <i data-lucide="refresh-cw" class="w-3 h-3"></i>
-                        <span>Refresh</span>
-                    </button>
+                <div class="pt-1 flex items-center justify-between text-[10px] text-slate-400 border-t border-slate-800/60">
+                    <span id="energyTipSummary" class="truncate pr-1">Tip: Switch off lights in empty rooms</span>
+                    <button id="refreshEnergyBtn" class="text-cyan-400 hover:underline shrink-0">Refresh</button>
                 </div>
             </div>
 
-        </div>
+            <!-- 5. Phone Limits & Digital Wellbeing -->
+            <div class="glass-panel p-3.5 space-y-2.5">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-1.5">
+                        <i data-lucide="smartphone" class="w-4 h-4 text-emerald-400"></i>
+                        <h3 class="text-xs font-semibold text-slate-200">Digital Wellbeing</h3>
+                    </div>
+                    <button id="focusModeToggle" class="text-[11px] px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 hover:text-white border border-slate-700">
+                        Focus: OFF
+                    </button>
+                </div>
+                <div class="space-y-1 text-xs">
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">Today's Screen Time</span>
+                        <span id="screenTimeCount" class="font-bold text-emerald-400">2h 47m / 3h</span>
+                    </div>
+                    <div class="w-full bg-slate-800 rounded-full h-1.5">
+                        <div id="screenTimeBar" class="bg-gradient-to-r from-emerald-500 to-amber-500 h-1.5 rounded-full" style="width: 82%"></div>
+                    </div>
+                </div>
+            </div>
 
-    </main>
+        </aside>
+    </div>
 
-    <!-- Emergency Modal Triggered on SOS -->
+    <!-- ========================================================================= -->
+    <!-- MODALS & POPUPS                                                           -->
+    <!-- ========================================================================= -->
+
+    <!-- Emergency SOS Modal -->
     <div id="sosModal" class="fixed inset-0 bg-red-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
         <div class="bg-slate-900 border-2 border-red-500 rounded-3xl max-w-md w-full p-6 text-center space-y-4 shadow-2xl shadow-red-500/30">
             <div class="w-16 h-16 rounded-full bg-red-600/30 text-red-500 border border-red-500 mx-auto flex items-center justify-center animate-bounce">
@@ -267,11 +459,38 @@
     <div id="deadlineModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-5 space-y-3">
             <h3 class="text-sm font-semibold text-white">Add New Submission Deadline</h3>
-            <input type="text" id="newDeadlineTitle" placeholder="e.g. Physics Lab Report" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+            <input type="text" id="newDeadlineTitle" placeholder="e.g. Distributed Systems Lab" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
             <input type="datetime-local" id="newDeadlineDate" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500">
+            <div class="flex space-x-2">
+                <select id="newDeadlinePriority" class="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none">
+                    <option value="medium">Medium Priority</option>
+                    <option value="high">High Priority</option>
+                    <option value="urgent">Urgent</option>
+                    <option value="low">Low</option>
+                </select>
+                <input type="number" id="newDeadlineHours" placeholder="Est. Hours" value="2.0" step="0.5" class="w-24 bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none">
+            </div>
             <div class="flex justify-end space-x-2 pt-2">
                 <button id="closeDeadlineModalBtn" class="px-3 py-1.5 text-xs text-slate-400 hover:text-white">Cancel</button>
-                <button id="saveDeadlineBtn" class="px-4 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium">Save Deadline</button>
+                <button id="saveDeadlineBtn" class="px-4 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium">Save Task</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generic Modal for Memory, Activity, What-If, Settings -->
+    <div id="genericModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-5 space-y-4 max-h-[85vh] flex flex-col shadow-2xl">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 id="genericModalTitle" class="text-sm font-bold text-white flex items-center space-x-2">
+                    <span id="genericModalIcon"></span>
+                    <span id="genericModalHeading">Modal Title</span>
+                </h3>
+                <button id="closeGenericModalBtn" class="text-slate-400 hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div id="genericModalBody" class="flex-1 overflow-y-auto space-y-3 text-xs pr-1">
+                <!-- Content injected dynamically -->
             </div>
         </div>
     </div>
@@ -279,6 +498,6 @@
     <!-- Floating Toast Notification System -->
     <div id="toastContainer"></div>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=2.0.8"></script>
 </body>
 </html>

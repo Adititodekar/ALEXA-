@@ -1,74 +1,77 @@
-# 🌟 ALEXA- / NOVA AI: Next-Generation Multimodal Assistant & Life Guardian
+# 🌟 NOVA AI — ALEXA-NEXT 2.0: Autonomous Multimodal Web Assistant
 
-An advanced, multimodal, voice-interactive assistant designed for the **Alexa+ / Next-Gen Voice Hackathon**. It combines **conversational LLM reasoning, genuine MCP tool execution, an authentic 6-state Animated Alexa Eye, real-time live media cards, smart-home IoT & energy optimization, conversation-driven daily planning, deadline tracking, live GPS location & turn-by-turn navigation, digital wellbeing screen time limits, mood/emotion adaptation, and life-saving Emergency SOS detection**.
+An advanced, multimodal, voice-interactive personal AI assistant inspired by the conversational experience of **Amazon Alexa+**, enhanced with **Autonomous Mission Mode**, genuine **MCP tool execution**, an authentic **8-state Animated Alexa Eye**, real-time **multimodal vision & document analysis**, **user-controlled persistent memory**, **proactive conflict auditing**, **what-if schedule simulation**, and **emergency SOS guardian protection**.
 
 ---
 
-## 🏆 Hackathon Route Compliance
+## 🏆 Key Architectural Pillars
 
-This project is engineered to satisfy both hackathon submission routes:
+* **Autonomous Mission Mode (Signature Feature):**
+  * Formulates multi-step executable plans from high-level natural language goals.
+  * Interactive Plan Review in UI: users can inspect, edit step titles, reorder, or delete steps.
+  * Approval gates before state-changing or consequential operations.
+  * Bounded retry recovery and postcondition verification for every step.
+  * Complete persistence in SQLite (`missions` & `mission_steps`), surviving browser refreshes and restarts.
 
-* **Route A — Model Context Protocol (MCP) Implementation:**
+* **Model Context Protocol (MCP) Compliance (Route A):**
   * Implements MCP specification (v1.30+ / spec 2025-11-25) over **Streamable HTTP transport**.
   * Mounted live at `http://127.0.0.1:8000/mcp/` or runnable standalone via `python -m server.app`.
-  * Exposes verified, executable MCP tools: `list_devices`, `set_device_state`, `get_energy_summary`, and `get_saving_tips`.
-  * Validates JSON-RPC 2.0 inputs, manages session lifespans, and updates persistent device states.
+  * Verified tools: `list_devices`, `set_device_state`, `get_energy_summary`, `get_saving_tips`.
 
-* **Route B — Simulated Alexa+ Multimodal Experience:**
-  * Provides an interactive, voice-driven companion dashboard with two-way speech (STT/TTS).
-  * Incorporates an authentic **6-state Animated Alexa Eye** (Idle, Listening, Thinking, Speaking, Success, Error).
-  * Integrates Google **Gemini 3.8 Flash** with multi-turn memory, emotion adaptation, and seamless offline fallback.
+* **Simulated Alexa+ Multimodal Experience (Route B):**
+  * 3-panel dashboard (Navigation Sidebar, Main Conversation & Mission View, Command Center).
+  * Authentic **8-State Animated Alexa Eye** (`IDLE`, `LISTENING`, `THINKING`, `SPEAKING`, `EXECUTING`, `SUCCESS`, `ERROR`, `PAUSED`).
+  * Google **Gemini 3.8 Flash** with multi-turn memory, multimodal vision (PNG/JPG/PDF/TXT), and seamless offline fallback.
 
----
+* **Observable Tool Registry & Trust Center:**
+  * Typed tool registry with validation, permission levels (`read_only` vs `state_changing`), sanitized activity logs, and postcondition verification.
+  * Trust Center auditing: 100% of API keys stay strictly server-side.
 
-## 🚀 Key Features
-
-| Capability | How It Works |
-| :--- | :--- |
-| **👁️ Animated Alexa Eye Core** | Authentic 6-state interactive visualizer: breathing in **Idle**, expanding ripples in **Listening**, orbital particle spin in **Thinking**, audio waveform bars in **Speaking**, emerald confirmation pop in **Success**, and amber alert shake in **Error**. Respects `prefers-reduced-motion`. |
-| **🗣️ Two-Way Natural Voice Conversation** | Hands-free voice interaction using Web Speech API (STT/TTS) with natural voice synthesis and real-time audio visualization. |
-| **🧠 Gemini 3.8 Flash Intelligence** | Integrated with Google AI Studio's active `gemini-3.8-flash` model, passing multi-turn dialogue history, user emotional state, and location metadata. |
-| **💡 Smart Home IoT & Energy Monitor** | Controls connected household appliances (Living Room Light, Bedroom Fan, Smart TV, Kitchen Cooler), calculates real-time power draw in watts, and recommends power-saving tips. |
-| **📅 Conversation-Driven Daily Planner** | Automatically synthesizes daily agendas with prioritized deep-work blocks, meal breaks, and focus windows. |
-| **⏰ Submission Deadlines & Countdown Alerts** | SQLite-backed task and assignment tracking with live countdowns, urgency badges, and full CRUD (Add, Complete, Delete). |
-| **📍 Live GPS Tracking & Directions ("Where Am I?")** | Real-time geolocation, reverse-geocodes exact street address via OpenStreetMap Nominatim, and calculates turn-by-turn routes on a dark-themed Leaflet map. |
-| **📱 Phone Limits & Digital Wellbeing** | Monitors daily screen time and individual app limits (Instagram, YouTube). Includes voice warnings and a strict Focus Mode toggle. |
-| **🚨 Emergency SOS Guardian & Siren** | Listens for distress keywords ("Help me", "I had an accident") or manual panic button. Emits audio siren and broadcasts live GPS coordinates and emergency contacts. |
-| **🎭 Emotion & Mood Engine** | Detects emotional states (Joyful, Stressed, Anxious, Sad, Calm, Emergency) and adapts the tone of speech accordingly. |
+* **User-Controlled Persistent Memory & Digital Twin:**
+  * Persistent SQLite storage for confirmed facts, routines, preferences, and project context.
+  * Full user control: Search, Pin, Edit, Delete, Clear All, and Enable/Disable toggle.
 
 ---
 
-## 🛠️ Project Architecture
+## 🛠️ Repository Modules & Entry Points
 
 ```
 ALEXA-/
-├── app.py                     # Main FastAPI server (REST APIs, static UI & FastMCP mount)
-├── run.py                     # One-click launcher (starts server + opens browser)
-├── requirements.txt           # Unified project dependencies (FastAPI, uvicorn, mcp, google-genai, etc.)
-├── .env.example               # Safe environment variable template
-├── .env                       # Local secrets (ignored by Git)
+├── app.py                      # Main FastAPI server (REST APIs, static UI & FastMCP mount)
+├── run.py                      # One-click launcher (starts server + opens browser)
+├── requirements.txt            # Unified project dependencies
+├── .env.example                # Safe environment variable template
+├── .env                        # Local secrets (ignored by Git)
 ├── core/
-│   ├── brain.py               # Central AI orchestrator & intent router
-│   ├── smart_home.py          # Shared IoT device state & energy calculation engine
-│   ├── mood_engine.py         # Sentiment & distress detection engine
-│   ├── emergency_guardian.py  # Emergency situation detector & SOS dispatcher
-│   ├── location_service.py    # Geolocation, reverse geocoding & OSRM routing
-│   ├── media_service.py       # Live Wikipedia data, verified images & YouTube links
-│   ├── wellbeing_tracker.py   # Screen time & app usage limiter
-│   ├── planner.py             # SQLite-backed daily schedule & deadline engine (Full CRUD)
-│   └── conversation_engine.py # Dynamic offline dialogue engine & multi-turn memory
+│   ├── brain.py                # Central AI orchestrator & intent router
+│   ├── database.py             # SQLite persistence manager & non-destructive migrations
+│   ├── mission_engine.py       # Autonomous Mission planner, step editor & executor
+│   ├── tool_registry.py        # Typed tool registry, validation & audit logging
+│   ├── memory_manager.py       # Persistent user-controlled memory (Facts & Twin)
+│   ├── multimodal_service.py   # Document parsing, image vision, & task proposer
+│   ├── proactive_engine.py     # Workload conflict detector & explainable recommendations
+│   ├── what_if_simulator.py    # Non-destructive scenario tester & trade-off analyzer
+│   ├── skill_builder.py        # Reusable natural language routines
+│   ├── reminder_service.py     # Scheduled automation & reminder tracker
+│   ├── conversation_manager.py # Multi-turn persistent chat threads
+│   ├── smart_home.py           # Persistent IoT device hub & wattage calculations
+│   ├── planner.py              # Task & deadline engine with conflict detection
+│   ├── location_service.py     # Geolocation, reverse geocoding & OSRM routing
+│   ├── media_service.py        # Live Wikipedia data & verified media links
+│   ├── wellbeing_tracker.py    # Screen time & focus mode engine
+│   └── emergency_guardian.py   # Emergency SOS dispatcher & siren audio
 ├── server/
-│   ├── app.py                 # FastMCP server exposing IoT & energy tools over Streamable HTTP
-│   └── web_api.py             # Standalone API endpoints
+│   ├── app.py                  # Standalone FastMCP server over Streamable HTTP
+│   └── web_api.py              # Standalone API endpoints
 ├── static/
-│   ├── index.html             # Multimodal dashboard with Animated Alexa Eye & IoT widgets
-│   ├── style.css              # Cyber-clean glassmorphism dark theme & CSS keyframe animations
-│   └── app.js                 # Web Speech API, Leaflet map, toast alerts & IoT polling
-├── mobile_android/
-│   ├── NovaForegroundService.kt # Android Kotlin foreground service reference
-│   └── AndroidManifest_Snippet.xml # Android permissions reference
+│   ├── index.html              # 3-Panel glassmorphism companion dashboard
+│   ├── style.css               # 8-state Animated Alexa Eye & cyber-clean dark theme
+│   └── app.js                  # Speech recognition, audio synth siren, map, & missions
+├── tests/
+│   └── test_nova.py            # Automated 10-point test suite (unit + integration)
 └── data/
-    └── nova_planner.db        # SQLite database for persistent deadlines and notes
+    ├── nova_planner.db         # Persistent SQLite database
+    └── uploads/                # Safe directory for uploaded assignment files
 ```
 
 ---
@@ -77,15 +80,16 @@ ALEXA-/
 
 ### 1. Prerequisites
 * Python 3.10+ (tested on Python 3.12)
-* Google Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey) *(optional — offline conversation engine works without keys)*
+* Modern web browser (Chrome, Edge, Firefox, Safari)
+* Google Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey) *(optional — offline conversational fallback active if unconfigured)*
 
 ### 2. Environment Setup
 1. Clone or open the repository.
-2. Copy the template and add your API key:
+2. Copy the configuration template:
    ```bash
    cp .env.example .env
    ```
-3. Configure `.env`:
+3. Add your Gemini key to `.env`:
    ```env
    GEMINI_API_KEY=your_actual_key_here
    GEMINI_MODEL=gemini-3.8-flash
@@ -102,7 +106,24 @@ Start the unified application:
 python run.py
 ```
 * Your browser will automatically open to **`http://127.0.0.1:8000`**.
-* The FastMCP Streamable HTTP server will be available at **`http://127.0.0.1:8000/mcp/`**.
+* The FastMCP Streamable HTTP server is available at **`http://127.0.0.1:8000/mcp/`**.
+* The Health check endpoint is at **`http://127.0.0.1:8000/api/health`**.
+
+---
+
+## 🧪 Testing and Verification
+
+Run the automated test suite verifying all 10 core capabilities (health, missions, tool registry, memory CRUD, task conflicts, uploads, IoT persistence, proactive insights, what-if simulator):
+
+```bash
+python -m unittest tests/test_nova.py
+```
+
+Expected result:
+```
+Ran 10 tests in ~12s
+OK
+```
 
 ---
 
@@ -110,54 +131,63 @@ python run.py
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `GET` | `/api/health` | Health check, service status, and Gemini diagnostics |
+| `GET` | `/api/health` | Diagnostic status (Gemini active, MCP active, missions ready) |
 | `POST` | `/api/chat` | Conversational voice/text processor and intent router |
-| `GET` | `/api/devices` | Lists all smart-home IoT devices and operational states |
-| `POST` | `/api/device` | Toggles device power state (`{"device": "bedroom_fan", "on": true}`) |
-| `GET` | `/api/energy` | Returns current total household power draw (watts) and active count |
-| `GET` | `/api/planner/deadlines` | Retrieves tracked submission deadlines |
-| `POST` | `/api/planner/deadlines` | Adds a new submission deadline |
-| `POST` | `/api/planner/deadlines/{id}/complete` | Marks a deadline completed |
-| `DELETE` | `/api/planner/deadlines/{id}` | Permanently deletes a deadline |
-| `GET` | `/api/wellbeing/status` | Returns screen time and app usage stats |
-| `POST` | `/api/wellbeing/focus` | Toggles strict Focus Mode |
+| `POST` | `/api/missions/plan` | Creates structured multi-step autonomous mission plan |
+| `GET` | `/api/missions/{id}` | Retrieves full mission details, steps, and progress |
+| `PUT` | `/api/missions/{id}/steps` | Edits or reorders mission steps prior to execution |
+| `POST` | `/api/missions/{id}/approve` | Triggers sequential execution of approved mission steps |
+| `POST` | `/api/missions/{id}/cancel` | Halts active or pending autonomous mission |
+| `GET` | `/api/activity/logs` | Real-time observable timeline of tool calls and verifications |
+| `GET` | `/api/trust-center` | Trust Center policies, registered tools, and permissions |
+| `GET` | `/api/memory` | Retrieves persistent user memories and preferences |
+| `POST` | `/api/memory` | Saves confirmed fact or routine to persistent memory |
+| `DELETE` | `/api/memory/{id}` | Deletes a stored memory |
+| `POST` | `/api/multimodal/upload` | Uploads and analyzes PDF/image/doc with Gemini vision |
+| `GET` | `/api/proactive/insights` | Generates explainable workload and conflict recommendations |
+| `POST` | `/api/what-if/simulate` | Evaluates schedule adjustments on cloned task data |
+| `POST` | `/api/what-if/apply` | Applies approved schedule scenario to live tasks |
+| `GET` | `/api/devices` | Lists smart-home IoT appliances and power states |
+| `POST` | `/api/device` | Toggles device state (`{"device": "living_room_light", "on": true}`) |
+| `GET` | `/api/energy` | Returns current household power draw in watts |
 | `POST` | `/api/sos/trigger` | Triggers emergency distress broadcast with live GPS |
-| `POST` | `/mcp/` | MCP Streamable HTTP JSON-RPC 2.0 tool execution endpoint |
+| `POST` | `/mcp/` | FastMCP Streamable HTTP JSON-RPC 2.0 endpoint |
 
 ---
 
-## 🎬 3-Minute Demo Walkthrough Script
+## 🎬 Required End-to-End Demonstration Script
 
-Use this step-by-step sequence for recording your hackathon demo:
+Follow this sequence to demonstrate NOVA's full autonomous agent workflow:
 
-1. **Introduction & Idle Eye (0:00 - 0:30)**:
-   * Point out the dashboard and the **Animated Alexa Eye** in its gentle ambient breathing state.
-   * Explain Nova's role as a next-generation multimodal assistant and guardian.
+1. **Mission Goal Formulation:**
+   * Open the dashboard at `http://127.0.0.1:8000`.
+   * Click the suggestion pill: *"Help me plan my week and prepare for my upcoming assignments."*
+   * Observe NOVA analyzing deadlines and memories, switching the Alexa Eye to **Paused (Awaiting Approval)**, and displaying the **Autonomous Mission Review Card**.
 
-2. **Smart Home & Energy Tool Execution (0:30 - 1:10)**:
-   * Click the suggestion pill: *"Turn on the living room light and show energy usage"*.
-   * Watch the Alexa Eye transition into **Thinking** (orbiting violet ring) -> **Success** (emerald flash) -> **Speaking** (sound wave bars).
-   * Observe the chat response confirming the action and the **Smart Home IoT card** on the right updating its wattage load.
+2. **Plan Review & User Approval:**
+   * Inspect the editable steps. You can modify any step title or remove steps.
+   * Click **Approve & Execute**.
+   * Observe the Alexa Eye transition into **Executing (amber/cyan atomic spin)**.
+   * Watch the step badges advance in real time: `Pending` -> `Running` -> `Succeeded`.
+   * Observe the completion summary report and verified tasks added to the SQLite database.
 
-3. **General Knowledge & Verified Media (1:10 - 1:45)**:
-   * Ask: *"Show me real images and videos of the James Webb Space Telescope"*.
-   * Demonstrates Gemini 3.8 Flash answering concisely while the Media Service fetches real high-resolution images and YouTube explainers.
+3. **Multimodal Document Upload:**
+   * Click the paperclip icon in the chat bar and attach an assignment brief, syllabus, or screenshot.
+   * Click Send.
+   * Observe NOVA extract the core summary, detect specific deadlines, and propose tasks with a **+ Add to Tasks** button.
 
-4. **Deadline Tracking & Day Planner (1:45 - 2:20)**:
-   * Ask: *"Prepare my day based on my deadlines"*.
-   * Show the structured day schedule generated with deep work blocks.
-   * Add a deadline using the `+ Add Deadline` modal, observe the live countdown, and check off an assignment.
+4. **Observable Trust Center & Activity Inspector:**
+   * Click **Activity & Trust Center** in the left sidebar.
+   * Inspect the chronological audit log showing tool names, execution durations in milliseconds, sanitized arguments, and postcondition verification checkmarks.
 
-5. **Location Awareness & Emergency SOS (2:20 - 3:00)**:
-   * Ask: *"Where am I?"* to display the live GPS coordinates, reverse-geocoded street address, and Leaflet route line.
-   * Click the **SOS EMERGENCY** button.
-   * Show the red alert modal, audio siren, and live distress coordinates broadcast.
+5. **Persistence Verification:**
+   * Refresh the browser or restart the server.
+   * Confirm that all created tasks, memories, conversation threads, and smart-home states persist without data loss.
 
 ---
 
-## 🔍 Simulation & Hardware Disclosure
+## 🔍 Hardware & Simulation Disclosure
 
-In compliance with hackathon transparency guidelines:
-* **Smart-Home Devices:** Device states (lights, fans, TVs, AC) and power draws are simulated in memory via `core/smart_home.py` and FastMCP. No real physical relays are altered.
-* **Emergency Dispatch:** The emergency call and distress broadcast simulate SMS and phone transmission; personal contact entries and `112` dialing links are provided.
-* **Android Deployment:** The `mobile_android/` directory provides production-ready Kotlin source code (`NovaForegroundService.kt`) outlining the native Android APIs (`UsageStatsManager`, `FusedLocationProviderClient`, `SmsManager`).
+* **Smart-Home Appliances:** Device relays (lights, fans, TVs, AC) and power loads are simulated with realistic wattage math in `core/smart_home.py` and persisted in SQLite.
+* **Emergency Dispatch:** Emergency SOS distress calls simulate SMS and phone transmission; personal contact entries and direct `112` dialing links are provided.
+* **Digital Wellbeing:** App limits and focus mode reflect browser-accessible metrics and user-configured goals.

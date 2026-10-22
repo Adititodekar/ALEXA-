@@ -11,6 +11,8 @@ env/
 
 # SQLite Databases & temporary files
 data/*.db
+data/uploads/*
+!data/uploads/.gitkeep
 *.sqlite3
 *.log
 

@@ -322,23 +322,24 @@ class ConversationEngine:
                 self.record_turn(clean_text, reply, topic=title)
                 return {"speech": reply, "display": f"📚 **Further Details on {title}**\n\n{more_text}", "topic": title, "raw": raw_data}
 
-        # 15. Encyclopedic & Knowledge Search
-        # Strip common question prefixes to get clean entity topic
-        clean_topic = clean_text
-        for prefix in [
-            "what is the meaning of", "what is a", "what is an", "what is", "who is", "who was",
-            "tell me about", "explain to me", "explain", "how does", "how do", "can you tell me about",
-            "history of", "search for", "find out about"
-        ]:
+        # 15. Encyclopedic & Knowledge Search (ONLY for explicit factual inquiries)
+        clean_topic = None
+        encyclopedic_prefixes = [
+            "what is the meaning of", "what is a", "what is an", "who is", "who was",
+            "tell me about the", "history of", "search wikipedia for", "define", "what is the capital of"
+        ]
+        for prefix in encyclopedic_prefixes:
             if lowered.startswith(prefix):
-                clean_topic = clean_text[len(prefix):].strip(" ?.")
+                candidate = clean_text[len(prefix):].strip(" ?.")
+                # Filter out chit-chat and self-referential questions
+                if candidate.lower() not in ["you", "your name", "up", "going on", "new", "this", "that", "the time", "today's date", "my name", "love"]:
+                    clean_topic = candidate
                 break
 
-        if len(clean_topic) >= 2:
+        if clean_topic and len(clean_topic) >= 2:
             knowledge = self._fetch_knowledge(clean_topic)
             if knowledge:
                 title, extract, raw_data = knowledge
-                # Format a spoken summary (first 2-3 sentences)
                 sentences = [s.strip() for s in extract.split(". ") if s.strip()]
                 spoken_summary = ". ".join(sentences[:2])
                 if not spoken_summary.endswith("."):
@@ -354,15 +355,47 @@ class ConversationEngine:
                     "raw": raw_data
                 }
 
-        # 16. General Conversational Fallback (Intelligent reflection instead of static refusal)
+        # 16. Casual Chat & Engaging Dialogue Responses
+        if any(w in lowered for w in ["what's up", "what is up", "sup", "wassup", "what are you doing", "what are you up to"]):
+            replies = [
+                f"Just here and ready to help you{f', {name}' if name else ''}! We can chat, check the weather, play your favourite songs, or organize tasks. What's on your mind?",
+                "Monitoring your smart home, tracking your schedule, and ready for whatever you need. How's your day going?",
+                "Standing by and feeling great! What are we working on or listening to today?"
+            ]
+            reply = random.choice(replies)
+            self.record_turn(clean_text, reply)
+            return {"speech": reply, "display": reply, "topic": "chit-chat"}
+
+        if any(w in lowered for w in ["good night", "night nova", "going to sleep", "sleep well", "see you tomorrow"]):
+            reply = f"Good night{f', {name}' if name else ''}! Rest well and recharge. I'll be here whenever you're ready tomorrow."
+            self.record_turn(clean_text, reply)
+            return {"speech": reply, "display": f"🌙 **{reply}**", "topic": "night"}
+
+        if any(w in lowered for w in ["bored", "entertain me", "what should i do"]):
+            reply = "If you're looking for a quick reset, you can say 'Nova play my favourite songs', ask me for a fun fact, or check out today's daily briefing and weather!"
+            self.record_turn(clean_text, reply)
+            return {"speech": reply, "display": f"✨ {reply}", "topic": "bored"}
+
+        if any(w in lowered for w in ["you are awesome", "you are great", "love you", "good job", "nice job", "you're the best", "you rock"]):
+            replies = [
+                f"Thank you so much{f', {name}' if name else ''}! That really brightens my circuits. I love assisting you!",
+                f"You're awesome too! I'm always glad to be in your corner.",
+                "Thank you! Knowing that I'm helping you accomplish your goals is what I was built for."
+            ]
+            reply = random.choice(replies)
+            self.record_turn(clean_text, reply)
+            return {"speech": reply, "display": reply, "topic": "compliment"}
+
+        # 17. General Conversational Fallback (Thoughtful, human-like dialogue)
         fallbacks = [
-            f"That's an interesting question{f', {name}' if name else ''}! Could you give me a little more context or specify what you'd like to explore about that?",
-            f"I'm listening{f', {name}' if name else ''}! Tell me a bit more about what you have in mind so I can give you the best answer.",
-            f"I'd love to help with that. Could you rephrase or expand on your question so I can assist you accurately?"
+            f"I hear you{f', {name}' if name else ''}! That's an interesting thought. Tell me more about what you have in mind.",
+            f"I'm right here with you. What direction would you like to take that in?",
+            f"I'd love to chat more about that! Could you elaborate on what you're thinking?",
+            f"Got it! Let me know if you want me to assist with an action, find details, or just keep chatting."
         ]
         reply = random.choice(fallbacks)
         self.record_turn(clean_text, reply)
-        return {"speech": reply, "display": reply, "topic": "fallback"}
+        return {"speech": reply, "display": reply, "topic": "conversation"}
 
     # --- Conversational Assistants for Core Capabilities ---
 
