@@ -85,6 +85,51 @@ class ConversationManager:
             })
         return messages
 
+    def get_recent_messages(self, conversation_id: str, limit: int = 20) -> List[Dict[str, Any]]:
+        """Returns the latest messages in chronological order."""
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, conversation_id, role, content, payload_json, created_at
+                FROM messages
+                WHERE conversation_id = ?
+                ORDER BY id DESC
+                LIMIT ?
+            """, (conversation_id, limit))
+            rows = list(reversed(cursor.fetchall()))
+
+        messages = []
+        for r in rows:
+            payload = None
+            if r["payload_json"]:
+                try:
+                    payload = json.loads(r["payload_json"])
+                except Exception:
+                    pass
+            messages.append({
+                "id": r["id"],
+                "role": r["role"],
+                "content": r["content"],
+                "payload": payload,
+                "created_at": r["created_at"]
+            })
+        return messages
+
+    def get_recent_user_messages(self, since_timestamp: str, limit: int = 500) -> List[Dict[str, Any]]:
+        """Returns recent user turns across all conversations in chronological order."""
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT id, conversation_id, content, created_at FROM messages "
+                "WHERE role = 'user' AND created_at >= ? ORDER BY id ASC LIMIT ?",
+                (since_timestamp, limit)
+            )
+            rows = cursor.fetchall()
+        return [
+            {"id": row["id"], "conversation_id": row["conversation_id"], "content": row["content"], "created_at": row["created_at"]}
+            for row in rows
+        ]
+
     def append_message(self, conversation_id: str, role: str, content: str, payload: Optional[Dict[str, Any]] = None) -> int:
         """Appends a user or assistant message to the thread."""
         with self.db.get_connection() as conn:

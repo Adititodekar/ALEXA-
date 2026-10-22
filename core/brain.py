@@ -12,11 +12,16 @@ import os
 import re
 import json
 import logging
-from datetime import datetime, timedelta
+import requests
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
 from dotenv import load_dotenv
+
+# Load project credentials before importing services that read environment
+# variables during module initialization.
+load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
 
 from .mood_engine import MoodEngine
 from .emergency_guardian import EmergencyGuardian
@@ -36,8 +41,8 @@ from .weather_service import weather_service
 from .music_service import music_service
 from .alarm_timer_service import alarm_timer_service
 from .news_service import news_service
+from .reminder_service import reminder_service
 
-load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
 logger = logging.getLogger(__name__)
 
 
@@ -62,9 +67,26 @@ class NovaBrain:
         self.alarms = alarm_timer_service
         self.news = news_service
 
-        # Gemini API Configuration
+        # Select the general conversation provider. Tooling and multimodal
+        # integrations can still use Gemini independently when its key exists.
+        self.llm_provider = os.environ.get("LLM_PROVIDER", "gemini").strip().lower()
+        self.llm_fallback_providers = [
+            provider.strip().lower()
+            for provider in os.environ.get("LLM_FALLBACK_PROVIDERS", "gemini,openai,compatible").split(",")
+            if provider.strip()
+        ]
+        self.openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
+        self.openai_model = os.environ.get("OPENAI_MODEL", "gpt-6-astra").strip()
+        self.compatible_llm_key = os.environ.get("LLM_API_KEY", "").strip()
+        self.compatible_llm_base_url = os.environ.get(
+            "LLM_BASE_URL", "https://api.groq.com/openai/v1"
+        ).strip().rstrip("/")
+        self.compatible_llm_model = os.environ.get("LLM_MODEL", "llama-3.3-70b-versatile").strip()
+
+        # Gemini API Configuration (also used for mission and multimodal tools).
         self.gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
-        self.gemini_model = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash").strip()
+        self.gemini_model = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash").strip()
+        self.llm_model = self._model_for_provider(self.llm_provider)
         self.gemini_client = None
 
         if self.gemini_key:
@@ -77,6 +99,301 @@ class NovaBrain:
             except Exception as exc:
                 logger.warning("Could not initialize Gemini client: %s. Using built-in conversational engine.", exc)
                 self.gemini_client = None
+
+    def _schedule_deadline_reminder(self, task: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Schedule a persistent alert exactly one hour before a task is due."""
+        try:
+            due = datetime.strptime(task["due_date"][:16], "%Y-%m-%d %H:%M")
+        except (KeyError, TypeError, ValueError):
+            return None
+
+        now = datetime.now()
+        if due <= now:
+            return None
+        reminder_at = due - timedelta(hours=1)
+        if reminder_at <= now:
+            reminder_at = now + timedelta(minutes=1)
+        return reminder_service.add_reminder(
+            f"Upcoming deadline: {task['title']}",
+            reminder_at.strftime("%Y-%m-%d %H:%M")
+        )
+
+    @staticmethod
+    def _parse_deadline_datetime(text: str, reference_time: Optional[datetime] = None) -> Optional[datetime]:
+        """Parse common explicit dates and times without guessing an absent date."""
+        now = reference_time or datetime.now()
+        lowered = text.lower()
+        target = None
+
+        iso_match = re.search(r"\b(20\d{2}-\d{1,2}-\d{1,2})(?:[ T](\d{1,2}:\d{2}))?\b", text)
+        if iso_match:
+            try:
+                target = datetime.strptime(iso_match.group(1), "%Y-%m-%d")
+                if iso_match.group(2):
+                    hour, minute = map(int, iso_match.group(2).split(":"))
+                    target = target.replace(hour=hour, minute=minute)
+            except ValueError:
+                target = None
+
+        if target is None:
+            numeric = re.search(r"\b(\d{1,2})[/.](\d{1,2})[/.](20\d{2})\b", text)
+            if numeric:
+                try:
+                    target = datetime(int(numeric.group(3)), int(numeric.group(2)), int(numeric.group(1)))
+                except ValueError:
+                    target = None
+
+        if target is None:
+            month_pattern = r"\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}(?:,?\s+\d{4})?|\b\d{1,2}\s+(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?:\s+\d{4})?"
+            month_match = re.search(month_pattern, text, re.IGNORECASE)
+            if month_match:
+                date_text = re.sub(r",", "", month_match.group(0)).strip()
+                for fmt in ("%B %d %Y", "%b %d %Y", "%d %B %Y", "%d %b %Y", "%B %d", "%b %d", "%d %B", "%d %b"):
+                    try:
+                        target = datetime.strptime(date_text, fmt)
+                        if "%Y" not in fmt:
+                            target = target.replace(year=now.year)
+                            if target.date() < now.date():
+                                target = target.replace(year=now.year + 1)
+                        break
+                    except ValueError:
+                        continue
+
+        relative = re.search(r"\bin\s+(\d+)\s+(day|week)s?\b", lowered)
+        if target is None and relative:
+            amount = int(relative.group(1)) * (7 if relative.group(2) == "week" else 1)
+            target = now + timedelta(days=amount)
+
+        weekday = re.search(r"\b(next\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b", lowered)
+        if target is None and weekday:
+            weekdays = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6}
+            days_ahead = (weekdays[weekday.group(2)] - now.weekday()) % 7
+            if days_ahead == 0 or weekday.group(1):
+                days_ahead += 7
+            target = now + timedelta(days=days_ahead)
+
+        if target is None:
+            if "tomorrow" in lowered:
+                target = now + timedelta(days=1)
+            elif "today" in lowered or "tonight" in lowered:
+                target = now
+
+        if target is None and "next week" in lowered:
+            target = now + timedelta(days=7)
+        # A clock time with an explicit reminder request means today if it is
+        # still ahead, otherwise tomorrow. Do not infer dates for ordinary chat.
+        reminder_requested = re.search(
+            r"\b(?:remind me|reminder|set (?:me )?a reminder)\b", lowered
+        )
+        time_match = re.search(r"\b(?:at\s*)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b", lowered)
+        if target is None and reminder_requested and time_match:
+            target = now
+            hour = int(time_match.group(1)) % 12
+            if time_match.group(3) == "pm":
+                hour += 12
+            target = target.replace(hour=hour, minute=int(time_match.group(2) or 0), second=0, microsecond=0)
+            if target <= now:
+                target += timedelta(days=1)
+        if target is None:
+            return None
+
+        if time_match:
+            hour = int(time_match.group(1)) % 12
+            if time_match.group(3) == "pm":
+                hour += 12
+            target = target.replace(hour=hour, minute=int(time_match.group(2) or 0))
+        elif not iso_match or not iso_match.group(2):
+            target = target.replace(hour=21 if "tonight" in lowered else 17, minute=0)
+        return target
+
+    def _capture_conversation_deadline(
+        self,
+        conversation_id: str,
+        latest_text: str,
+        reference_time: Optional[datetime] = None,
+        previous_user_text: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Capture a dated commitment stated explicitly in this chat thread."""
+        recent = self.conversation_mgr.get_recent_messages(conversation_id, limit=20)
+        user_messages = [m["content"] for m in recent if m.get("role") == "user"]
+        latest_date = self._parse_deadline_datetime(latest_text, reference_time)
+        if not latest_date:
+            return None
+
+        commitment_pattern = re.compile(
+            r"\b(?:i need to|i have to|i must|i will|i'll|i am going to|i'm going to|remind me(?:\s+to)?|"
+            r"(?:give|set)\s+(?:me\s+)?(?:a\s+)?reminder(?:\s+to)?|reminder\s+to|"
+            r"deadline|due|submit|finish|complete|hand in|turn in|exam|test|assignment|project|"
+            r"appointment|meeting|interview|presentation)\b",
+            re.IGNORECASE
+        )
+        source_text = latest_text if commitment_pattern.search(latest_text) else ""
+        if not source_text:
+            previous_user_message = previous_user_text if previous_user_text is not None else (user_messages[-2] if len(user_messages) > 1 else "")
+            if commitment_pattern.search(previous_user_message):
+                source_text = previous_user_message
+        if not source_text or re.search(r"\b(?:what if|maybe|might|could|should|not going to|don't need to)\b", source_text, re.IGNORECASE):
+            return None
+        has_commitment_request = re.search(
+            r"\b(?:i need to|i have to|i must|i will|i'll|remind me|reminder|deadline|due)\b",
+            source_text, re.IGNORECASE
+        )
+        if re.match(r"(?i)^\s*(?:what|when|where|why|how|is|are|do|does|can you tell me)\b", source_text) and "?" in source_text and not has_commitment_request:
+            return None
+
+        title_source = re.sub(
+            r"(?i)^\s*(?:today|tomorrow|tonight|next\s+(?:week|monday|tuesday|wednesday|thursday|friday|saturday|sunday)|"
+            r"monday|tuesday|wednesday|thursday|friday|saturday|sunday|in\s+\d+\s+(?:days?|weeks?))\b[\s,;:-]*",
+            "", source_text
+        )
+        title_text = re.sub(
+            r"(?i)^.*?\b(?:i need to|i have to|i must|i will|i'll|i am going to|i'm going to|remind me(?:\s+to)?|"
+            r"(?:give|set)\s+(?:me\s+)?(?:a\s+)?reminder(?:\s+to)?|reminder\s+to)\b\s*",
+            "", title_source
+        ).strip()
+        if title_text == title_source.strip():
+            title_text = re.sub(r"(?i)^.*?\bdeadline\s+(?:for|to)\s*", "", title_source).strip()
+        title_text = re.split(
+            r"(?i)\b(?:due|by|on|at|before|after|tomorrow|today|tonight|next week|next\s+"
+            r"(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|in\s+\d+\s+"
+            r"(?:days?|weeks?)|monday|tuesday|wednesday|thursday|friday|saturday|sunday|"
+            r"jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|"
+            r"aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b|"
+            r"\b20\d{2}-\d{1,2}-\d{1,2}\b|\b\d{1,2}[/.]\d{1,2}[/.]20\d{2}\b|"
+            r"\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b",
+            title_text
+        )[0].strip(" ,:-")
+        title_text = re.sub(r"(?i)^(?:i have an|i have a|i have|i've got|my|the|a|an)\s+", "", title_text).strip()
+        title_text = re.sub(r"(?i)\s+is$", "", title_text).strip()
+        if len(title_text) < 3:
+            return None
+
+        lowered = source_text.lower()
+        category = next((name for keyword, name in (
+            ("exam", "Exam"), ("test", "Exam"), ("assignment", "Assignment"),
+            ("project", "Project"), ("meeting", "Meeting"), ("appointment", "Personal"),
+            ("interview", "Interview"), ("presentation", "Presentation"), ("deadline", "Deadline")
+        ) if keyword in lowered), "General")
+        priority = "urgent" if any(word in lowered for word in ("urgent", "asap", "critical")) else (
+            "high" if "important" in lowered else
+            "high" if category in ("Exam", "Assignment", "Project", "Deadline") else "medium"
+        )
+        task = self.planner.add_deadline(
+            title=title_text,
+            due_date=latest_date.strftime("%Y-%m-%d %H:%M"),
+            category=category,
+            priority=priority,
+            estimated_hours=2.5
+        )
+        if task.get("already_exists"):
+            return None
+        if re.search(r"\b(?:remind me|reminder|set (?:me )?a reminder)\b", source_text, re.IGNORECASE):
+            reminder = reminder_service.add_reminder(
+                f"Reminder: {title_text}", latest_date.strftime("%Y-%m-%d %H:%M")
+            )
+        else:
+            reminder = self._schedule_deadline_reminder(task)
+        return {"task": task, "reminder": reminder}
+
+    def scan_recent_conversation_deadlines(self) -> List[Dict[str, Any]]:
+        """Scan the last 24 hours of saved chats and capture dated commitments."""
+        utc_since = (datetime.now(timezone.utc) - timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
+        messages = self.conversation_mgr.get_recent_user_messages(utc_since)
+        previous_by_conversation: Dict[str, str] = {}
+        captured = []
+        for message in messages:
+            conversation_id = message["conversation_id"]
+            try:
+                created = datetime.strptime(message["created_at"], "%Y-%m-%d %H:%M:%S")
+                reference_time = created.replace(tzinfo=timezone.utc).astimezone().replace(tzinfo=None)
+            except (TypeError, ValueError):
+                reference_time = datetime.now()
+            found = self._capture_conversation_deadline(
+                conversation_id,
+                message["content"],
+                reference_time=reference_time,
+                previous_user_text=previous_by_conversation.get(conversation_id, "")
+            )
+            if found:
+                captured.append(found)
+            previous_by_conversation[conversation_id] = message["content"]
+        return captured
+
+    def _model_for_provider(self, provider: str) -> str:
+        return {
+            "gemini": getattr(self, "gemini_model", os.environ.get("GEMINI_MODEL", "gemini-3.8-flash").strip()),
+            "openai": self.openai_model,
+            "compatible": self.compatible_llm_model,
+        }.get(provider, "")
+
+    def _provider_is_ready(self, provider: str) -> bool:
+        return (
+            (provider == "gemini" and self.gemini_client is not None)
+            or (provider == "openai" and bool(self.openai_key))
+            or (provider == "compatible" and bool(self.compatible_llm_key))
+        )
+
+    def _provider_order(self) -> List[str]:
+        ordered = []
+        for provider in [self.llm_provider, *self.llm_fallback_providers]:
+            if provider in {"gemini", "openai", "compatible"} and provider not in ordered:
+                if self._provider_is_ready(provider):
+                    ordered.append(provider)
+        return ordered
+
+    def _generate_provider_text(self, provider: str, prompt: str) -> str:
+        if provider == "gemini":
+            response = self.gemini_client.models.generate_content(
+                model=self.gemini_model,
+                contents=prompt
+            )
+            return response.text.strip() if response and response.text else ""
+        if provider == "openai":
+            return self._generate_openai_text(prompt, self.openai_model)
+        return self._generate_compatible_text(prompt, self.compatible_llm_model)
+
+    def _generate_openai_text(self, prompt: str, model: str) -> str:
+        """Generate a conversational answer using OpenAI's Responses API."""
+        response = requests.post(
+            "https://api.openai.com/v1/responses",
+            headers={"Authorization": f"Bearer {self.openai_key}"},
+            json={"model": model, "input": prompt},
+            timeout=60,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if payload.get("output_text"):
+            return payload["output_text"].strip()
+        text_parts = [
+            part.get("text", "")
+            for item in payload.get("output", [])
+            for part in item.get("content", [])
+            if part.get("type") == "output_text"
+        ]
+        return "\n".join(part for part in text_parts if part).strip()
+
+    def _generate_compatible_text(self, prompt: str, model: str) -> str:
+        """Call an OpenAI-compatible chat endpoint (for example Groq/Llama)."""
+        response = requests.post(
+            f"{self.compatible_llm_base_url}/chat/completions",
+            headers={"Authorization": f"Bearer {self.compatible_llm_key}"},
+            json={
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": "You are Nova, a natural, helpful conversational assistant. Answer the user directly in their language."},
+                    {"role": "user", "content": prompt},
+                ],
+            },
+            timeout=60,
+        )
+        response.raise_for_status()
+        choices = response.json().get("choices", [])
+        if not choices:
+            return ""
+        content = choices[0].get("message", {}).get("content", "")
+        if isinstance(content, list):
+            content = "".join(part.get("text", "") for part in content if isinstance(part, dict))
+        return content.strip() if isinstance(content, str) else ""
 
     def process_message(
         self,
@@ -108,8 +425,19 @@ class NovaBrain:
                 "address": self.location_service.last_known_address
             }
 
-        # Analyze mood & sentiment
+        # Analyze the current turn first so an older emergency statement can
+        # never trigger SOS. If this turn is neutral, use a short recent-user
+        # context window to keep the mood check-in conversational.
         mood_data = self.mood_engine.analyze(clean_text)
+        if mood_data.get("primary_mood") == "neutral":
+            recent_user_text = [
+                item.get("content", "") for item in self.conversation_mgr.get_recent_messages(conversation_id, limit=6)
+                if item.get("role") == "user"
+            ][-3:]
+            context_mood = self.mood_engine.analyze(" ".join(recent_user_text))
+            if context_mood.get("primary_mood") != "neutral" and not context_mood.get("is_emergency"):
+                mood_data = context_mood
+                mood_data["contextual"] = True
 
         # --- 1. EMERGENCY / SOS (Highest Priority) ---
         if mood_data.get("is_emergency") or any(k in lowered for k in ["help me", "call police", "call ambulance", "accident", "emergency", "danger"]):
@@ -249,22 +577,22 @@ class NovaBrain:
             ).strip()
             title_text = title_text.lstrip(":- ").strip()
 
-            # Split title from due date if "due" or "by" or "on" is present
-            due_str = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d 17:00")
-            if "tomorrow" in lowered:
-                due_str = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d 17:00")
-            elif "tonight" in lowered or "today" in lowered:
-                due_str = datetime.now().strftime("%Y-%m-%d 21:00")
-            elif "friday" in lowered:
-                # Next Friday approximation
-                due_str = (datetime.now() + timedelta(days=3)).strftime("%Y-%m-%d 17:00")
-            elif "monday" in lowered:
-                due_str = (datetime.now() + timedelta(days=5)).strftime("%Y-%m-%d 17:00")
+            due_dt = self._parse_deadline_datetime(clean_text) or (datetime.now() + timedelta(days=1)).replace(hour=17, minute=0, second=0, microsecond=0)
+            due_str = due_dt.strftime("%Y-%m-%d %H:%M")
 
             # Clean title
             task_title = title_text if title_text else "Upcoming Assignment"
             # Remove trailing due hints from title
-            task_title = re.sub(r"(?i)\s*(?:due|by|on)\s+(?:tomorrow|tonight|today|friday|monday|next week).*", "", task_title).strip()
+            task_title = re.sub(r"(?i)\s+(?:due|by|on|for)\s+.*$", "", task_title).strip()
+            task_title = re.sub(
+                r"(?i)\b(?:tomorrow|tonight|today|next week|next\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|"
+                r"\b20\d{2}-\d{1,2}-\d{1,2}(?:\s+\d{1,2}:\d{2})?\b|"
+                r"\b\d{1,2}[/.]\d{1,2}[/.]20\d{2}\b|"
+                r"\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}(?:,?\s+20\d{2})?\b|"
+                r"\b\d{1,2}\s+(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?:\s+20\d{2})?\b|"
+                r"\s+at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)\b",
+                "", task_title
+            ).strip(" ,:-")
             if not task_title:
                 task_title = "Assignment Task"
 
@@ -277,8 +605,14 @@ class NovaBrain:
                 priority=prio,
                 estimated_hours=2.5
             )
+            new_reminder = self._schedule_deadline_reminder(new_task)
 
-            speech = f"I've added '{task_title}' to your tasks, scheduled for {due_str}."
+            if new_task.get("already_exists"):
+                speech = f"'{task_title}' is already in your task list for {due_str}."
+            else:
+                speech = f"I've added '{task_title}' to your tasks, scheduled for {due_str}."
+            if new_reminder:
+                speech += f" I’ve scheduled a reminder for {new_reminder['due_time']}."
             display = (
                 f"📋 **Task Created & Tracked in SQLite**\n"
                 f"- **Title**: {task_title}\n"
@@ -294,6 +628,7 @@ class NovaBrain:
                 "type": "deadlines",
                 "deadlines": self.planner.get_deadlines(),
                 "new_task": new_task,
+                "new_reminder": new_reminder,
                 "media": None,
                 "location": current_location
             }
@@ -679,21 +1014,30 @@ class NovaBrain:
         display_reply = None
         executed_action_type = "conversation"
         extra_payload = {}
+        response_source = "offline_fallback"
+        provider_error = None
 
-        if self.gemini_client:
+        providers_to_try = self._provider_order()
+        if not providers_to_try:
+            provider_error = "No configured LLM provider is ready. Add a valid API key for the selected provider."
+        if providers_to_try:
             try:
-                history = self.conversation_mgr.get_messages(conversation_id, limit=8)
+                history = self.conversation_mgr.get_recent_messages(conversation_id, limit=40)
                 history_lines = [f"{m['role'].capitalize()}: {m['content']}" for m in history[:-1]]
                 history_context = "\n".join(history_lines) if history_lines else "None"
 
                 stored_memories = [m['content'] for m in self.memory.list_memories()[:3]]
                 mem_context = "; ".join(stored_memories) if stored_memories else "None"
 
-                active_tasks = [t['title'] for t in self.planner.get_deadlines() if t['status'] != 'completed'][:3]
-                task_context = ", ".join(active_tasks) if active_tasks else "None"
+                active_tasks = [
+                    f"{t['title']} (due {t['due_date']})"
+                    for t in self.planner.get_deadlines() if t['status'] != 'completed'
+                ][:20]
+                task_context = "; ".join(active_tasks) if active_tasks else "None"
 
                 prompt = (
                     "You are NOVA, an intelligent, empathetic conversational voice AI assistant inspired by Alexa+ (Alexa-Next 2.0).\n"
+                    f"Local date and time: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
                     f"User State: Mood={mood_data.get('primary_mood', 'calm')}, Location={current_location.get('address', 'Unknown')}\n"
                     f"Known User Memories: {mem_context}\n"
                     f"Upcoming Tasks: {task_context}\n\n"
@@ -701,7 +1045,8 @@ class NovaBrain:
                     f"User says: {clean_text}\n\n"
                     "INSTRUCTIONS:\n"
                     "1. CONVERSATIONAL FIRST: If the user is greeting you ('hi', 'hello', 'hey', etc.), asking how you are, making small talk, or asking a conversational question, respond warmly, pleasantly, and directly as their personal AI companion in 2-3 sentences. DO NOT treat casual greetings or chatter as a web search query! NEVER return search queries or URL dumps for simple hellos or conversational queries.\n"
-                    "2. ACTION EXECUTION: If the user specifically asks you to control a smart home appliance, create a task/deadline, or record a memory, output a JSON block in this exact format:\n"
+                    "2. CONVERSATION TASK TRACKING: Review recent chat history for a clear task, assignment, appointment, exam, or other commitment belonging to the user. If the latest user message states or clarifies an explicit due date (including one mentioned in the immediately relevant recent chat), create a task automatically with its exact title, ISO due date/time, category, and priority using the create_task action. Use 17:00 local time if only a date is given. Do not create tasks for hypotheticals, past events, or vague dates; ask one short question when a commitment is clear but its date is missing or ambiguous. Do not duplicate an existing task. Nova schedules a reminder one hour before each upcoming deadline.\n"
+                    "3. ACTION EXECUTION: If the user asks you to control a smart home appliance, create a task/deadline, or record a memory, output a JSON block in this exact format:\n"
                     "   ```json\n"
                     "   {\n"
                     "     \"action\": \"set_device_state\" | \"create_task\" | \"save_memory\",\n"
@@ -709,15 +1054,31 @@ class NovaBrain:
                     "     \"speech\": \"Spoken answer confirming the action\"\n"
                     "   }\n"
                     "   ```\n"
-                    "3. NATURAL SPEECH: When answering questions or conversing, speak like a capable, empathetic companion. Keep responses clear, concise, and conversational."
+                    "4. NATURAL SPEECH: Answer open-ended questions directly and naturally; do not repeat fixed scripts or describe your routing. Match the user's language and level of formality. Be clear and concise, and ask one focused follow-up only when needed. If unsure, say so rather than inventing facts."
                 )
 
-                response = self.gemini_client.models.generate_content(
-                    model=self.gemini_model,
-                    contents=prompt
-                )
-                if response and response.text:
-                    raw_text = response.text.strip()
+                raw_text = ""
+                provider_failures = []
+                for provider in providers_to_try:
+                    try:
+                        raw_text = self._generate_provider_text(provider, prompt)
+                        if raw_text:
+                            response_source = provider
+                            break
+                        provider_failures.append(f"{provider}: empty response")
+                    except Exception as exc:
+                        status_code = getattr(getattr(exc, "response", None), "status_code", None)
+                        detail = str(exc)
+                        for secret in (self.gemini_key, self.openai_key, self.compatible_llm_key):
+                            if secret:
+                                detail = detail.replace(secret, "[redacted]")
+                        detail = re.sub(r"(?i)(api[_ -]?key|authorization|bearer)\s*[:=]\s*[^\s,;]+", r"\1=[redacted]", detail)
+                        detail = detail[:240] or type(exc).__name__
+                        failure = f"HTTP {status_code}: {detail}" if status_code else f"{type(exc).__name__}: {detail}"
+                        provider_failures.append(f"{provider}: {failure}")
+                        logger.warning("LLM provider %s failed; trying the next configured provider (%s)", provider, failure)
+
+                if raw_text:
                     # Check if Gemini output an action JSON
                     if "```json" in raw_text or ('"action":' in raw_text and '"args":' in raw_text):
                         try:
@@ -746,8 +1107,24 @@ class NovaBrain:
                                 }
                             elif act == "create_task":
                                 executed_action_type = "deadlines"
-                                extra_payload["deadlines"] = self.planner.get_deadlines()
-                                extra_payload["new_task"] = exec_res.get("result")
+                                if exec_res.get("ok"):
+                                    new_task = exec_res.get("result")
+                                    explicit_reminder = re.search(
+                                        r"\b(?:remind me|reminder|set (?:me )?a reminder)\b",
+                                        clean_text, re.IGNORECASE
+                                    )
+                                    if explicit_reminder:
+                                        new_reminder = reminder_service.add_reminder(
+                                            f"Reminder: {new_task['title']}", new_task["due_date"][:16]
+                                        )
+                                    else:
+                                        new_reminder = self._schedule_deadline_reminder(new_task)
+                                    extra_payload["deadlines"] = self.planner.get_deadlines()
+                                    extra_payload["new_task"] = new_task
+                                    extra_payload["new_reminder"] = new_reminder
+                                    if new_reminder:
+                                        speech = f"{speech} I’ve also scheduled a reminder for {new_reminder['due_time']}."
+                                        display_reply = speech
                         except Exception as j_err:
                             logger.warning("Error parsing Gemini action JSON: %s", j_err)
                             speech = raw_text
@@ -755,15 +1132,22 @@ class NovaBrain:
                     else:
                         speech = raw_text
                         display_reply = raw_text
+                else:
+                    provider_error = "All configured AI providers failed (" + "; ".join(provider_failures) + "). Check each provider's key, model access, quota, and network."
             except Exception as exc:
-                logger.info("Gemini provider unavailable (%s). Falling back to local conversation engine.", exc)
+                logger.warning("Preparing LLM request failed: %s", exc)
+                provider_error = "Could not prepare the AI request. Check the backend logs for details."
                 speech = None
 
         # Fallback to local conversation engine
         if not speech:
-            conv_res = self.conversation.generate_response(clean_text, mood_data, current_location)
-            speech = conv_res["speech"]
-            display_reply = conv_res.get("display", speech)
+            if provider_error:
+                speech = "I can’t generate a chat answer right now because the configured AI provider is unavailable. Please check its quota or configure another working provider."
+                display_reply = speech
+            else:
+                conv_res = self.conversation.generate_response(clean_text, mood_data, current_location)
+                speech = conv_res["speech"]
+                display_reply = conv_res.get("display", speech)
 
         # --- 10. CRITICAL MEDIA FIX: ONLY fetch media when user EXPLICITLY asks for images or videos! ---
         media = None
@@ -778,6 +1162,23 @@ class NovaBrain:
                 search_query = clean_text
             media = self.media_service.fetch_knowledge_and_media(search_query)
 
+        if not extra_payload.get("new_task"):
+            captured = self._capture_conversation_deadline(conversation_id, clean_text)
+            if captured:
+                task = captured["task"]
+                reminder = captured.get("reminder")
+                confirmation = f"I picked up your {task['category'].lower()} commitment and added '{task['title']}' to Tasks & Deadlines for {task['due_date']}."
+                if reminder:
+                    confirmation += f" I’ll remind you on {reminder['due_time']}."
+                speech = confirmation if response_source == "offline_fallback" else (f"{speech} {confirmation}" if speech else confirmation)
+                display_reply = f"{display_reply}\n\n📌 {confirmation}" if display_reply else confirmation
+                executed_action_type = "deadlines"
+                extra_payload.update({
+                    "deadlines": self.planner.get_deadlines(),
+                    "new_task": task,
+                    "new_reminder": reminder
+                })
+
         reply_payload = {
             "speech_reply": speech,
             "display_reply": display_reply,
@@ -787,6 +1188,9 @@ class NovaBrain:
             "media": media,
             "location": current_location,
             "mission_plan": None,
+            "response_source": response_source,
+            "response_model": self._model_for_provider(response_source) if response_source != "offline_fallback" else None,
+            "provider_error": provider_error,
             **extra_payload
         }
 

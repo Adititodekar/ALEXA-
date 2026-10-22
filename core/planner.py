@@ -25,11 +25,27 @@ class Planner:
         """Adds a new submission deadline / task."""
         # Sanitize and ensure format if simple date provided
         clean_due = due_date.strip()
+        if "T" in clean_due:
+            clean_due = clean_due.replace("T", " ", 1)
         if len(clean_due) == 10 and clean_due.count("-") == 2:
             clean_due = f"{clean_due} 18:00"
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
+            cursor.execute(
+                "SELECT id, title, due_date, category, priority, status, estimated_hours, source_doc "
+                "FROM deadlines WHERE lower(trim(title)) = lower(trim(?)) AND due_date = ? "
+                "AND status != 'completed' ORDER BY id DESC LIMIT 1",
+                (title, clean_due)
+            )
+            existing = cursor.fetchone()
+            if existing:
+                return {
+                    "id": existing["id"], "title": existing["title"], "due_date": existing["due_date"],
+                    "category": existing["category"], "priority": existing["priority"],
+                    "status": existing["status"], "estimated_hours": existing["estimated_hours"],
+                    "source_doc": existing["source_doc"], "already_exists": True
+                }
             cursor.execute("""
                 INSERT INTO deadlines (title, due_date, category, priority, status, estimated_hours, source_doc)
                 VALUES (?, ?, ?, ?, 'pending', ?, ?)

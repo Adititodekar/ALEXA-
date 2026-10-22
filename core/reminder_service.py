@@ -19,6 +19,19 @@ class ReminderService:
         """Creates a new persistent reminder."""
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
+            cursor.execute(
+                "SELECT id, title, due_time, recurring, status, delivered FROM reminders "
+                "WHERE lower(trim(title)) = lower(trim(?)) AND due_time = ? AND status = 'pending' "
+                "ORDER BY id DESC LIMIT 1",
+                (title.strip(), due_time.strip())
+            )
+            existing = cursor.fetchone()
+            if existing:
+                return {
+                    "id": existing["id"], "title": existing["title"], "due_time": existing["due_time"],
+                    "recurring": existing["recurring"], "status": existing["status"],
+                    "delivered": bool(existing["delivered"]), "already_exists": True
+                }
             cursor.execute("""
                 INSERT INTO reminders (title, due_time, recurring, status, delivered)
                 VALUES (?, ?, ?, 'pending', 0)

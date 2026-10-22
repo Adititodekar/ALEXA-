@@ -37,6 +37,27 @@ class MoodEngine:
                 "all good", "balanced", "rested"
             ]
         }
+        # Common Hindi/Hinglish and Spanish phrases. This is a lightweight
+        # language-aware signal, not a clinical or definitive assessment.
+        extra_phrases = {
+            "stressed": ["tension ho rahi", "bahut pressure", "kaam bahut zyada", "estresado", "estresada", "agobiado", "agobiada"],
+            "anxious": ["ghabra raha", "ghabra rahi", "chinta ho rahi", "dar lag raha", "ansioso", "ansiosa", "preocupado", "preocupada"],
+            "sad": ["udaas", "akela lag raha", "akeli lag rahi", "mann udaas", "triste", "me siento solo", "me siento sola"],
+            "joyful": ["khush hoon", "bahut khush", "maza aa gaya", "feliz", "muy contento", "muy contenta", "emocionado", "emocionada"],
+            "calm": ["sukoon", "shaant hoon", "theek hoon", "tranquilo", "tranquila", "en paz"]
+        }
+        for emotion, phrases in extra_phrases.items():
+            self.emotion_lexicon[emotion].extend(phrases)
+
+        self.suggestions = {
+            "emergency": "If you’re in immediate danger, contact local emergency services or someone you trust now.",
+            "stressed": "Try choosing one small next step, then take a short pause before the next one.",
+            "anxious": "A slow breath with a longer exhale may help. If you want, tell me what’s worrying you.",
+            "sad": "Consider reaching out to someone you trust, or tell me what’s been weighing on you.",
+            "joyful": "Enjoy the moment—and if you like, share what’s making you feel good.",
+            "calm": "You seem settled. This could be a good moment for a task that needs focus.",
+            "neutral": "I don’t have a clear mood signal yet. You can tell me how you’re feeling, or just keep chatting."
+        }
 
     def analyze(self, text: str) -> Dict[str, Any]:
         """
@@ -80,9 +101,17 @@ class MoodEngine:
             primary_mood = "neutral"
             tone_advice = "Helpful, conversational, natural and concise like Alexa."
 
+        # Confidence reflects keyword evidence only. Phrase matches are not
+        # proof of a person's internal state, so expose uncertainty clearly.
+        unique_emotions = set(matched_emotions)
+        confidence = 0.0 if primary_mood == "neutral" else min(0.9, 0.55 + 0.12 * max(0, matched_emotions.count(primary_mood) - 1))
+
         return {
             "primary_mood": primary_mood,
-            "detected_emotions": list(set(matched_emotions)),
+            "detected_emotions": sorted(unique_emotions),
             "is_emergency": is_emergency,
-            "tone_advice": tone_advice
+            "tone_advice": tone_advice,
+            "confidence": confidence,
+            "suggestion": self.suggestions[primary_mood],
+            "disclaimer": "A best-effort read of your words, not a diagnosis. Tell Nova if it got your mood wrong."
         }

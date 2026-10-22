@@ -43,6 +43,10 @@ const uploadFileSize = document.getElementById("uploadFileSize");
 const cancelUploadBtn = document.getElementById("cancelUploadBtn");
 const moodBadge = document.getElementById("moodBadge");
 const moodText = document.getElementById("moodText");
+const moodTracker = document.getElementById("moodTracker");
+const moodEstimate = document.getElementById("moodEstimate");
+const moodSuggestion = document.getElementById("moodSuggestion");
+const moodDisclaimer = document.getElementById("moodDisclaimer");
 const gpsLocationText = document.getElementById("gpsLocationText");
 const locationAddressLabel = document.getElementById("locationAddressLabel");
 const sosBtn = document.getElementById("sosBtn");
@@ -89,6 +93,8 @@ function initApp() {
     try { initSpeechRecognition(); } catch (e) { console.warn("initSpeechRecognition error:", e); }
     try { loadConversations(); } catch (e) { console.warn("loadConversations error:", e); }
     try { loadDeadlines(); } catch (e) { console.warn("loadDeadlines error:", e); }
+    try { checkDueReminders(); } catch (e) { console.warn("checkDueReminders error:", e); }
+    window.setInterval(checkDueReminders, 60 * 1000);
     try { loadSmartHome(); } catch (e) { console.warn("loadSmartHome error:", e); }
     try { loadWellbeing(); } catch (e) { console.warn("loadWellbeing error:", e); }
     try { loadProactiveInsights(); } catch (e) { console.warn("loadProactiveInsights error:", e); }
@@ -123,6 +129,150 @@ function showToast(message, type = "info") {
         toast.style.transform = "translateY(8px)";
         setTimeout(() => toast.remove(), 300);
     }, 3500);
+}
+
+async function checkDueReminders() {
+    try {
+        const response = await fetch("/api/reminders");
+        if (!response.ok) return;
+        const data = await response.json();
+        const pending = (data.reminders || []).filter(reminder => reminder.status === "pending");
+        const badge = document.getElementById("reminderCountBadge");
+        if (badge) badge.textContent = String(pending.length);
+        for (const reminder of (data.reminders || [])) {
+            if (!reminder.is_due_now || reminder.status !== "pending") continue;
+            const message = `Reminder: ${reminder.title}. It is time to complete your task.`;
+            showToast(message, "info");
+            if (localStorage.getItem("novaSpokenReminders") === "enabled") {
+                speakText(message);
+            }
+            if ("Notification" in window && Notification.permission === "granted") {
+                new Notification("Nova reminder", { body: message });
+            }
+            await fetch(`/api/reminders/${reminder.id}/complete`, { method: "POST" });
+        }
+    } catch (error) {
+        console.warn("Reminder check failed:", error);
+    }
+}
+
+async function openReminderCenter() {
+    try {
+        const scanResponse = await fetch("/api/reminders/scan-conversations", { method: "POST" });
+        if (!scanResponse.ok) throw new Error("Could not scan today's conversation.");
+        const scan = await scanResponse.json();
+        const response = await fetch("/api/reminders");
+        if (!response.ok) throw new Error("Could not load reminders.");
+        const data = await response.json();
+        if (scan.count > 0) {
+            loadDeadlines();
+            loadProactiveInsights();
+            showToast(`Added ${scan.count} conversation task(s) to your tracker.`, "success");
+        }
+        const reminders = (data.reminders || []).filter(item => item.status === "pending");
+        const rows = reminders.length ? reminders.map(item => `
+            <div class="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950 p-3">
+                <div class="min-w-0">
+                    <p class="truncate text-xs font-semibold text-slate-100">${escapeHtml(item.title)}</p>
+                    <p class="mt-1 text-[10px] text-slate-400">${escapeHtml(item.due_time)}${item.is_due_now ? ' · Due now' : ''}</p>
+                </div>
+                <div class="flex shrink-0 gap-1.5">
+                    <button type="button" onclick="completeSavedReminder(${Number(item.id)})" class="rounded-lg bg-emerald-950 px-2 py-1 text-[10px] text-emerald-300 hover:bg-emerald-900">Done</button>
+                    <button type="button" onclick="deleteSavedReminder(${Number(item.id)})" class="rounded-lg bg-slate-800 px-2 py-1 text-[10px] text-slate-300 hover:bg-red-950 hover:text-red-300">Delete</button>
+                </div>
+            </div>
+        `).join("") : '<p class="py-4 text-center text-xs text-slate-500">No reminders yet. Add one below or tell Nova what you need to remember.</p>';
+
+        openModal("Reminders", "", `
+            <div class="space-y-4">
+                <form id="reminderCreateForm" class="space-y-2 rounded-xl border border-amber-700/30 bg-amber-950/20 p-3">
+                    <label for="reminderTitleInput" class="block text-xs font-semibold text-amber-200">What should Nova remind you about?</label>
+                    <input id="reminderTitleInput" required maxlength="180" placeholder="e.g. Submit the science assignment" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white placeholder-slate-500 focus:border-amber-500 focus:outline-none">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <input id="reminderDueInput" required type="datetime-local" class="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white focus:border-amber-500 focus:outline-none">
+                        <button type="submit" class="rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-500">Add reminder</button>
+                    </div>
+                </form>
+                <div class="space-y-2">
+                    <h3 class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Upcoming reminders (${reminders.length})</h3>
+                    <div class="max-h-64 space-y-2 overflow-y-auto">${rows}</div>
+                </div>
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <p class="flex-1 text-[10px] text-slate-500">Opening Reminders scans saved conversations from the last 24 hours and adds clear dated commitments to Tasks &amp; Deadlines, with a reminder one hour before. Nova checks alerts while the dashboard is open.</p>
+                    <button type="button" onclick="enableSpokenReminders()" class="rounded-lg border border-amber-700/50 px-2.5 py-1.5 text-[10px] text-amber-200 hover:border-amber-500">${localStorage.getItem("novaSpokenReminders") === "enabled" ? "Sound reminders on" : "Enable sound reminders"}</button>
+                    <button type="button" onclick="enableReminderNotifications()" class="rounded-lg border border-slate-700 px-2.5 py-1.5 text-[10px] text-slate-300 hover:border-amber-500 hover:text-amber-200">Enable desktop alerts</button>
+                </div>
+            </div>
+        `);
+
+        const dueInput = document.getElementById("reminderDueInput");
+        if (dueInput) {
+            const now = new Date();
+            now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+            dueInput.min = now.toISOString().slice(0, 16);
+        }
+        const form = document.getElementById("reminderCreateForm");
+        if (form) form.addEventListener("submit", saveReminderFromCenter);
+    } catch (error) {
+        showToast(error.message || "Could not open reminders.", "error");
+    }
+}
+
+function enableSpokenReminders() {
+    if (!("speechSynthesis" in window)) {
+        showToast("Spoken reminders are not supported by this browser.", "error");
+        return;
+    }
+    localStorage.setItem("novaSpokenReminders", "enabled");
+    speakText("Sound reminders are enabled. I will speak your task when its reminder is due.");
+    showToast("Sound reminders enabled.", "success");
+}
+
+async function saveReminderFromCenter(event) {
+    event.preventDefault();
+    const title = document.getElementById("reminderTitleInput")?.value.trim();
+    const dueInput = document.getElementById("reminderDueInput")?.value;
+    if (!title || !dueInput) {
+        showToast("Enter a reminder and its date and time.", "error");
+        return;
+    }
+    try {
+        const response = await fetch("/api/reminders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title, due_time: dueInput.replace("T", " ") })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.detail || "Could not save the reminder.");
+        showToast("Reminder saved.", "success");
+        await checkDueReminders();
+        await openReminderCenter();
+    } catch (error) {
+        showToast(error.message || "Could not save the reminder.", "error");
+    }
+}
+
+async function enableReminderNotifications() {
+    if (!("Notification" in window)) {
+        showToast("This browser does not support desktop notifications.", "error");
+        return;
+    }
+    const permission = await Notification.requestPermission();
+    showToast(permission === "granted" ? "Desktop reminder alerts enabled." : "Allow notifications in your browser settings to enable desktop alerts.", permission === "granted" ? "success" : "info");
+}
+
+async function completeSavedReminder(reminderId) {
+    await fetch(`/api/reminders/${reminderId}/complete`, { method: "POST" });
+    showToast("Reminder marked done.", "success");
+    await checkDueReminders();
+    await openReminderCenter();
+}
+
+async function deleteSavedReminder(reminderId) {
+    await fetch(`/api/reminders/${reminderId}`, { method: "DELETE" });
+    showToast("Reminder deleted.", "info");
+    await checkDueReminders();
+    await openReminderCenter();
 }
 
 // =========================================================================
@@ -178,7 +328,6 @@ function initMusicPlayer() {
     const prevBtn = document.getElementById("prevTrackBtn");
     const volumeSlider = document.getElementById("playerVolume");
     const refreshWeatherBtn = document.getElementById("refreshWeatherBtn");
-
     if (refreshWeatherBtn) {
         refreshWeatherBtn.addEventListener("click", () => {
             loadWeather();
@@ -245,8 +394,9 @@ async function nextTrack() {
     try {
         const res = await fetch("/api/music/next", { method: "POST" });
         const data = await res.json();
-        if (data.track) {
-            updateTrackUI(data.track);
+        const track = data.track || data.current_track;
+        if (track) {
+            updateTrackUI(track);
             const audio = document.getElementById("novaAudioPlayer");
             if (audio) {
                 audio.src = data.track.audio_url;
@@ -263,8 +413,9 @@ async function prevTrack() {
     try {
         const res = await fetch("/api/music/prev", { method: "POST" });
         const data = await res.json();
-        if (data.track) {
-            updateTrackUI(data.track);
+        const track = data.track || data.current_track;
+        if (track) {
+            updateTrackUI(track);
             const audio = document.getElementById("novaAudioPlayer");
             if (audio) {
                 audio.src = data.track.audio_url;
@@ -278,6 +429,7 @@ async function prevTrack() {
 }
 
 function updateTrackUI(track) {
+    if (!track) return;
     const title = document.getElementById("playerTrackTitle");
     const artist = document.getElementById("playerArtist");
     const album = document.getElementById("playerAlbum");
@@ -617,7 +769,7 @@ async function approveSuggestedTasks(tasks) {
 }
 
 function handleAssistantResponse(data) {
-    if (data.mood) updateMoodUI(data.mood.primary_mood);
+    if (data.mood) updateMoodUI(data.mood);
 
     // Speak aloud if voice speech provided
     if (data.speech_reply) {
@@ -650,6 +802,7 @@ function handleAssistantResponse(data) {
         loadDeadlines();
         loadProactiveInsights();
         showToast("Task tracker updated!", "success");
+        if (data.new_reminder) checkDueReminders();
     }
 
     // Instantly sync Weather if weather response
@@ -819,6 +972,13 @@ function appendAssistantMessage(text, payload) {
     el.className = "flex items-start space-x-3 bg-slate-900/80 border border-slate-800 p-4 rounded-2xl shadow-lg";
 
     let extraHtml = "";
+    const providerNames = { gemini: "Gemini", openai: "OpenAI", compatible: "Llama API" };
+    const replySourceLabel = payload && providerNames[payload.response_source]
+        ? `${providerNames[payload.response_source]} · ${escapeHtml(payload.response_model || "")}`
+        : (payload && payload.response_source === "offline_fallback" ? "Offline reply" : "");
+    if (payload && payload.provider_error) {
+        extraHtml += `<p class="mt-2 text-[11px] text-amber-300">${escapeHtml(payload.provider_error)}</p>`;
+    }
 
     // ONLY render media cards if media is explicitly present!
     if (payload && payload.media) {
@@ -860,7 +1020,7 @@ function appendAssistantMessage(text, payload) {
         <div class="text-sm space-y-2 flex-1">
             <div class="font-semibold text-cyan-400 flex items-center justify-between">
                 <span>Nova</span>
-                <span class="text-[10px] text-slate-500 font-mono">${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                <span class="text-[10px] text-slate-500 font-mono">${replySourceLabel ? `${replySourceLabel} · ` : ""}${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
             </div>
             <div class="text-slate-200 leading-relaxed">${formatMarkdown(text)}</div>
             ${extraHtml}
@@ -1277,6 +1437,11 @@ async function handleTabSwitch(tab) {
         // 2. Music Player Tab
         else if (tab === "music") {
             const res = await fetch("/api/music/state");
+            if (!res.ok) {
+                let detail = await res.text();
+                try { detail = JSON.parse(detail).detail || detail; } catch (_) {}
+                throw new Error(`Music service returned ${res.status}: ${detail.slice(0, 240)}`);
+            }
             const state = await res.json();
             const cur = state.current_track || {};
             const list = state.playlist || [];
@@ -1901,9 +2066,15 @@ function quickAsk(text) {
     submitMessage(text);
 }
 
-function updateMoodUI(mood) {
-    if (!moodText || !moodBadge) return;
-    moodText.textContent = `Mood: ${mood.charAt(0).toUpperCase() + mood.slice(1)}`;
+function updateMoodUI(moodData) {
+    if (!moodData) return;
+    const mood = typeof moodData === "string" ? moodData : moodData.primary_mood;
+    if (moodText && moodBadge) moodText.textContent = `Mood: ${mood.charAt(0).toUpperCase() + mood.slice(1)}`;
+    if (!moodTracker || typeof moodData === "string") return;
+    moodTracker.classList.remove("hidden");
+    moodEstimate.textContent = mood === "neutral" ? "No clear signal yet" : `Possibly ${mood}${moodData.contextual ? " · from recent messages" : ""}`;
+    moodSuggestion.textContent = moodData.suggestion || "Keep chatting, or tell Nova directly how you feel.";
+    moodDisclaimer.textContent = moodData.disclaimer || "A best-effort read of your words, not a diagnosis. Tell Nova if it got your mood wrong.";
 }
 
 function setupEventListeners() {

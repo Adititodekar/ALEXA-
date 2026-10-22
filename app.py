@@ -418,6 +418,12 @@ async def list_reminders():
     """Returns scheduled reminders with countdowns."""
     return {"reminders": reminder_service.list_reminders()}
 
+@app.post("/api/reminders/scan-conversations")
+async def scan_conversation_reminders():
+    """Turn dated commitments from recent conversation into tasks and reminders."""
+    captured = brain.scan_recent_conversation_deadlines()
+    return {"count": len(captured), "captured": captured}
+
 @app.post("/api/reminders")
 async def add_reminder(req: ReminderCreateRequest):
     """Schedules a new reminder."""
@@ -543,12 +549,17 @@ async def toggle_focus(enable: bool = True):
 @app.get("/api/health")
 async def health_endpoint():
     """System health check and diagnostic status."""
+    llm_active = bool(brain._provider_order())
     return {
         "status": "online",
         "service": "NOVA AI Assistant API (Alexa-Next 2.0)",
         "version": "2.0.0",
         "gemini_active": brain.gemini_client is not None,
         "gemini_model": brain.gemini_model if brain.gemini_client else "offline_conversational_fallback",
+        "llm_provider": brain.llm_provider,
+        "llm_active": llm_active,
+        "llm_model": brain._model_for_provider(brain.llm_provider) if llm_active else None,
+        "llm_fallback_providers": brain.llm_fallback_providers,
         "mcp_enabled": True,
         "autonomous_missions_active": True,
         "tools_registered_count": len(tool_registry.tools)
@@ -579,11 +590,7 @@ async def get_weather(city: Optional[str] = None, lat: Optional[float] = None, l
 
 @app.get("/api/music/state")
 async def get_music_state():
-    return {
-        "is_playing": brain.music.is_playing,
-        "current_track": brain.music.get_current_track(),
-        "playlist": brain.music.tracks
-    }
+    return brain.music.get_player_state()
 
 @app.post("/api/music/play")
 async def play_music():
@@ -600,6 +607,7 @@ async def next_music():
 @app.post("/api/music/prev")
 async def prev_music():
     return brain.music.prev_track()
+
 
 @app.get("/api/alarms")
 async def get_all_alarms_timers():

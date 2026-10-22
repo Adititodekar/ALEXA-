@@ -95,6 +95,7 @@ class MusicService:
 
     def get_player_state(self) -> Dict[str, Any]:
         return {
+            "provider": "demo",
             "is_playing": self.is_playing,
             "current_track": self.tracks[self.current_index],
             "playlist": self.tracks
