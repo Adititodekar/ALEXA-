@@ -22,23 +22,23 @@
 > **Target Amazon Ecosystem:** Amazon Echo, Echo Show (Multimodal Screen Experience), Fire TV, and Fire OS / Android Tablets.
 
 ### 🎯 How NOVA Answers Amazon's Hackathon Challenge
-Amazon announced that **Alexa+** leverages the **Model Context Protocol (MCP)** as an open standard for third-party services and agent skills. Because official preview developer toolkits are restricted to select enterprise partners, Amazon challenged hackathon developers to:
+Amazon selected the **Model Context Protocol (MCP)** as an open standard for third-party services and agent skills to plug into Alexa+. Because official preview developer toolkits are restricted to select enterprise partners, Amazon challenged hackathon developers to:
 1. **Build a Self-Hosted MCP Server** exposing tools over Streamable HTTP transport.
 2. **Simulate the Alexa+ Experience** using an agentic web application and companion dashboard.
 
-**NOVA AI is the end-to-end realization of this challenge:**
+**NOVA AI directly fulfills this challenge:**
 * **Self-Hosted FastMCP Server:** Implements the official MCP specification (2025-11-25) over **Streamable HTTP** at `http://127.0.0.1:8000/mcp`, exposing tools (`list_devices`, `set_device_state`, `get_energy_summary`, `get_saving_tips`).
 * **Simulated Alexa+ Multimodal Companion:** Designed for screen-equipped Amazon devices like the **Echo Show** and **Fire Tablets**, pairing an authentic **8-State Animated Alexa Eye** with speech recognition/neural synthesis, interactive mission plan review cards, Leaflet GPS maps, and real-time Trust Center auditing.
 * **Agentic Autonomous Mission Mode:** Moves beyond shallow, single-turn voice skills into multi-step goal formulation, human-in-the-loop review, bounded execution, and verified tool postconditions.
-* **Fire OS & Ambient Android Companion:** Via [`mobile_android/NovaForegroundService.kt`](file:///c:/Users/APURVA/OneDrive/Documents/Desktop/Alexa/mobile_android), NOVA brings ambient GPS tracking, screen time supervision, and emergency SOS dispatch to Amazon Fire OS / Android devices.
+* **Fire OS & Ambient Android Companion:** Via [`mobile_android/NovaForegroundService.kt`](file:///c:/Users/APURVA/OneDrive/Documents/Desktop/Alexa/mobile_android), NOVA provides ambient GPS tracking, screen time supervision, and emergency SOS dispatch for Fire OS and Android devices.
 
 ---
 
-## 📌 Executive Summary & Vision
+## 📌 Project Overview & Vision
 
-**NOVA AI (Alexa-Next 2.0)** transforms voice assistants from passive, reactive command-responders into an **autonomous, proactive, and multimodal personal agent**.
+**NOVA AI (Alexa-Next 2.0)** transforms smart voice assistants from passive command-responders into an **autonomous, proactive, and multimodal personal agent**.
 
-Traditional smart assistants suffer from four fundamental limitations:
+Traditional voice assistants suffer from fundamental limitations:
 1. **Shallow Single-Turn Execution:** They answer trivia or set timers, but cannot plan, decompose, or complete complex multi-step objectives.
 2. **Hallucinated & Unaudited Tool Calls:** Users have zero visibility into what tools are invoked, whether actions succeeded, or how secrets are handled.
 3. **Ephemeral Context & Amnesia:** They forget user routines, critical preferences, and long-term commitments between sessions.
@@ -62,7 +62,7 @@ Traditional smart assistants suffer from four fundamental limitations:
 
 ```mermaid
 graph TB
-    subgraph Client_Layer [Client & Amazon Echo Show Companion]
+    subgraph Client_Layer [Client & Echo Show Companion]
         UI["Echo Show Companion Dashboard (Tailwind, Lucide, Leaflet)"]
         EYE["8-State Dynamic Animated Alexa Eye"]
         VOICE["Web Speech API & Neural Audio Synthesis"]
@@ -129,12 +129,12 @@ graph TB
 
 ---
 
-## 🏆 Key Features & Innovation Highlights
+## 🏆 Implemented Features & Technical Deep Dive
 
-### 1. 🚀 Autonomous Mission Mode (Signature Feature)
-* **Goal Decomposition:** Deconstructs complex user prompts (e.g., *"Help me organize my week, prepare for my midterm assignments, identify conflicts, and create a study plan"*) into verifiable, sequential subtasks.
-* **Interactive Plan Review & Human-in-the-Loop:** Renders plans as editable cards on the screen where users can rename steps, delete steps, or reorder them before execution.
-* **Consequential Approval Gates:** Requires explicit user sign-off for state-changing or high-impact actions.
+### 1. 🚀 Autonomous Mission Mode
+* **Goal Decomposition:** Deconstructs complex user prompts (e.g., *"Help me organize my week, prepare for my assignments, identify deadline conflicts, and create a realistic study schedule"*) into verifiable, sequential subtasks.
+* **Interactive Plan Review & Human-in-the-Loop:** Renders plans as editable cards on screen where users can rename steps, delete steps, or reorder them before execution.
+* **Consequential Approval Gates:** Requires explicit user authorization before state-changing or high-impact actions.
 * **Resilient Bounded Execution:** Each step features bounded retries, execution verification checkmarks, and fallback recovery.
 * **Full Persistence:** Missions and steps survive browser reloads and server restarts in SQLite (`missions` and `mission_steps`).
 
@@ -146,7 +146,7 @@ graph TB
 
 ### 3. 👁️ Authentic 8-State Animated Alexa Eye
 A dynamic, reactive cybernetic eye visualizer rendered in CSS & Canvas responding to assistant state:
-| State | Color & Animation | Description |
+| State | Visual Appearance | Trigger & Assistant Lifecycle |
 | :--- | :--- | :--- |
 | `IDLE` | Soft Cyan Ambient Breathing | Standby mode waiting for voice/text wake |
 | `LISTENING` | Deep Cyan Acoustic Waveform | Active microphone capturing user input |
@@ -159,7 +159,7 @@ A dynamic, reactive cybernetic eye visualizer rendered in CSS & Canvas respondin
 
 ### 4. 🗓️ Conversation Commitment Scanner & Automatic Deadlines
 * **Explicit Date Parsing:** Recognizes natural language timestamps without hallucinating dates ("tomorrow at 4pm", "next Monday", "in 3 days", "Oct 27 at 18:00").
-* **Commitment Extraction:** Analyzes spoken promises (*"I need to submit my physics assignment tomorrow by 5 PM"*) and turns them into tasks.
+* **Commitment Extraction:** Analyzes spoken promises (*"I need to submit my physics assignment tomorrow by 5 PM"*) and registers them in the planner.
 * **Proactive 1-Hour Alerts:** Automatically schedules a persistent alert 1 hour before every recorded deadline.
 * **Conversation History Scanner:** Scans the last 24 hours of multi-turn conversation threads to unearth forgotten commitments with a single click.
 
@@ -197,8 +197,6 @@ A dynamic, reactive cybernetic eye visualizer rendered in CSS & Canvas respondin
 ---
 
 ## 📂 Repository Structure
-
-The codebase is organized cleanly without redundant files or dangling build artifacts:
 
 ```
 ALEXA/
@@ -324,7 +322,7 @@ LLM_MODEL=llama-3.3-70b-versatile
 ## 🏃 Running the Application
 
 ### One-Click Launch
-Start the unified application with the automated runner:
+Start the application with the automated runner:
 
 ```bash
 python run.py
@@ -400,61 +398,6 @@ python -m unittest tests/test_nova.py
 | `GET` | `/api/energy` | Real-time total power draw (watts) | None |
 | `POST` | `/api/sos/trigger` | Triggers SOS distress broadcast | `{"situation": "Emergency distress", "latitude": 37.77}` |
 | `POST` | `/mcp` | FastMCP Streamable HTTP JSON-RPC 2.0 | Standard MCP JSON-RPC payload |
-
----
-
-## 🎬 End-to-End Hackathon Demonstration Walkthrough
-
-Follow this 5-minute script to demonstrate NOVA's full capabilities to judges:
-
-### Scene 1: Conversational Wake & 8-State Alexa Eye
-1. Open `http://127.0.0.1:8000`.
-2. Notice the **Alexa Eye** in soft cyan `IDLE` state.
-3. Click the microphone icon or type: `"Hello Nova, what are you capable of?"`
-4. Watch the eye transition smoothly: `LISTENING` $\rightarrow$ `THINKING` (indigo pulse) $\rightarrow$ `SPEAKING` (azure ripple).
-5. Listen to the natural voice response and review the companion card.
-
-### Scene 2: Conversation Commitment & Deadline Extraction
-1. Say or type: `"I need to submit my Machine Learning project proposal tomorrow at 5 PM."`
-2. Notice Nova extracts the title, category, priority, registers the deadline in the Planner, and automatically schedules an alert 1 hour prior.
-3. Open the **Reminder Center** modal and click **Scan Conversations for Deadlines** to demonstrate historical commitment extraction.
-
-### Scene 3: Autonomous Mission Mode (Formulate $\rightarrow$ Review $\rightarrow$ Execute)
-1. Click the suggested prompt pill: *"Help me plan my week and prepare for my upcoming assignments."*
-2. NOVA analyzes deadlines and active memories, decomposes the goal into a 4-step mission, and transitions the Alexa Eye to **`PAUSED` (Awaiting Approval)**.
-3. The **Mission Review Card** appears in the UI.
-4. Modify any step title directly in the UI (demonstrating human-in-the-loop control).
-5. Click **Approve & Execute**.
-6. Observe the eye shift to **`EXECUTING` (atomic spin)** while step badges dynamically advance from `Pending` $\rightarrow$ `Running` $\rightarrow$ `Succeeded`.
-7. Notice the new tasks appear in the Planner.
-
-### Scene 4: Multimodal Document Intelligence
-1. Click the paperclip icon in the chat bar.
-2. Select any syllabus, assignment text file, or screenshot.
-3. Click **Send**.
-4. NOVA's multimodal engine parses the document with Gemini Vision, extracts key deadlines, highlights deliverables, and offers a single-click **+ Add to Tasks** action.
-
-### Scene 5: Observable Tool Registry & Trust Center
-1. Click **Activity & Trust Center** in the navigation sidebar.
-2. Point out the chronological audit trail:
-   * Tool names and caller IDs.
-   * Execution durations in milliseconds.
-   * Input arguments sanitized for privacy.
-   * Postcondition verification checkmarks.
-3. Highlight that **100% of API keys remain strictly server-side**.
-
-### Scene 6: What-If Simulator & Proactive Insights
-1. Click **Proactive Insights** to see detected deadline congestions.
-2. Open the **What-If Simulator**.
-3. Shift a heavy assignment by 2 days in the sandbox.
-4. Review the trade-off analysis showing reduced workload strain before committing the change.
-
-### Scene 7: Daily Briefing, Smart Home & Emergency Guardian
-1. Click **Daily Briefing** or ask: *"Give me my morning briefing."*
-2. Listen to the combined audio briefing covering weather, pending deadlines, power draw, and top news headlines.
-3. Say or type: `"Turn off the living room light and check my energy usage."`
-4. Observe the device card toggle immediately and total household wattage decrease.
-5. Click the **Emergency SOS** shield button: observe the emergency siren trigger, live GPS capture, and emergency dispatch broadcast card.
 
 ---
 
