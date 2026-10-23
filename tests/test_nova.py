@@ -205,6 +205,37 @@ class TestNovaAIAssistant(unittest.TestCase):
         self.assertIn("tradeoff_analysis", data)
         self.assertIn("simulated_tasks", data)
 
+    # 11. Conversation-Based Reminders & Deadline Scanner
+    def test_11_conversation_reminders(self):
+        scan_res = requests.post(f"{BASE_URL}/api/reminders/scan-conversations")
+        self.assertEqual(scan_res.status_code, 200)
+        scan_data = scan_res.json()
+        self.assertIn("count", scan_data)
+        self.assertIn("captured", scan_data)
+
+        reminders_res = requests.get(f"{BASE_URL}/api/reminders")
+        self.assertEqual(reminders_res.status_code, 200)
+        self.assertIn("reminders", reminders_res.json())
+
+    # 12. Weather, Daily Briefing, Alarms & Music Player
+    def test_12_weather_briefing_music_alarms(self):
+        w_res = requests.get(f"{BASE_URL}/api/weather")
+        self.assertEqual(w_res.status_code, 200)
+        w_data = w_res.json()
+        self.assertIn("city", w_data)
+        self.assertIn("temperature", w_data)
+
+        b_res = requests.get(f"{BASE_URL}/api/briefing")
+        self.assertEqual(b_res.status_code, 200)
+        b_data = b_res.json()
+        self.assertTrue("spoken" in b_data or "display" in b_data or "weather" in b_data)
+
+        m_res = requests.get(f"{BASE_URL}/api/music/state")
+        self.assertEqual(m_res.status_code, 200)
+
+        a_res = requests.get(f"{BASE_URL}/api/alarms")
+        self.assertEqual(a_res.status_code, 200)
+
 
 if __name__ == "__main__":
     unittest.main()
