@@ -1,9 +1,12 @@
-# 🏆 NOVA AI (Alexa-Next 2.0) — Hackathon Submission Dossier
+# 🏆 NOVA AI (Alexa-Next 2.0) — Amazon Developer Hackathon Submission Dossier
 
+> **Hackathon:** [Build, Ship, Shape: Amazon Developer Hackathon](https://amazonappdev2026.devpost.com/) (Devpost)  
+> **Track:** **Alexa+** (*"Build agentic experiences, self-hosted MCP servers, or Agent Skills using the open standards powering Alexa+"*)  
 > **Project Name:** NOVA AI (Alexa-Next 2.0)  
 > **Tagline:** Autonomous Multimodal Web Assistant, Life Guardian & IoT Companion  
+> **Target Amazon Ecosystem:** Amazon Echo, Echo Show (Multimodal Screen Experience), Fire TV, Fire OS / Android Tablets  
 > **Repository:** [https://github.com/Adititodekar/ALEXA-](https://github.com/Adititodekar/ALEXA-)  
-> **Primary Technologies:** Google Gemini 3.8 Flash, Multi-LLM Fallback (OpenAI & Groq/Llama 3.3), FastMCP (Model Context Protocol 2025-11-25 Streamable HTTP), FastAPI, SQLite3, TailwindCSS, Web Speech API, Leaflet Maps, Kotlin (Android Foreground Service)  
+> **Primary Technologies:** Google Gemini 3.8 Flash, Multi-LLM Fallback (OpenAI & Groq/Llama 3.3), FastMCP (Model Context Protocol 2025-11-25 Streamable HTTP), FastAPI, SQLite3, TailwindCSS, Web Speech API, Leaflet Maps, Kotlin (Android / Fire OS Foreground Service)  
 > **Test Status:** 12/12 Automated Integration Tests Passing  
 
 ---

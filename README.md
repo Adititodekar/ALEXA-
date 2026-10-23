@@ -1,22 +1,44 @@
 # 🌟 NOVA AI — ALEXA-NEXT 2.0
 ### Autonomous Multimodal Web Assistant, Life Guardian & IoT Companion
+**Built for the [Build, Ship, Shape: Amazon Developer Hackathon](https://amazonappdev2026.devpost.com/) — Track: Alexa+ (Agentic Experiences & Self-Hosted MCP)**
 
+[![Amazon Developer Hackathon](https://img.shields.io/badge/Amazon_Developer_Hackathon-Build%2C_Ship%2C_Shape_2026-FF9900.svg?logo=amazon&logoColor=white)](https://amazonappdev2026.devpost.com/)
+[![Track: Alexa+](https://img.shields.io/badge/Track-Alexa%2B_Agentic_%26_MCP-8A2BE2.svg)](https://amazonappdev2026.devpost.com/)
+[![FastMCP Spec](https://img.shields.io/badge/FastMCP-Streamable_HTTP_2025--11--25-00C7B7.svg)](https://modelcontextprotocol.io/)
+[![Multi-LLM Engine](https://img.shields.io/badge/LLM-Gemini_3.8_Flash_%7C_OpenAI_%7C_Groq_Llama-4285F4.svg)](https://aistudio.google.com/)
 [![Python Version](https://img.shields.io/badge/Python-3.10%2B-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![MCP Spec](https://img.shields.io/badge/FastMCP-Streamable_HTTP_2025--11--25-8A2BE2.svg)](https://modelcontextprotocol.io/)
-[![Multi-LLM Engine](https://img.shields.io/badge/LLM-Gemini_3.8_Flash_%7C_OpenAI_%7C_Groq_Llama-4285F4.svg)](https://aistudio.google.com/)
-[![Database](https://img.shields.io/badge/SQLite3-Persistent_Storage-003B57.svg?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
+[![SQLite3](https://img.shields.io/badge/SQLite3-Persistent_Storage-003B57.svg?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 [![TailwindCSS](https://img.shields.io/badge/TailwindCSS-v3.4-38B2AC.svg?logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![Tests](https://img.shields.io/badge/Tests-12%2F12_Passing-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
 
-## 📌 Executive Summary & Hackathon Vision
+## 🏆 Amazon Developer Hackathon Alignment: Alexa+ Track
 
-**NOVA AI (Alexa-Next 2.0)** transforms legacy voice assistants from passive, reactive command-responders into an **autonomous, proactive, and multimodal personal agent**. 
+> **Event:** [Build, Ship, Shape: Amazon Developer Hackathon](https://amazonappdev2026.devpost.com/) (Hosted by Amazon Developer on Devpost)  
+> **Challenge Track:** **Alexa+** (*"Build agentic experiences, self-hosted MCP (Model Context Protocol) servers, or Agent Skills using the open standards powering Alexa+"*)  
+> **Target Amazon Ecosystem:** Amazon Echo, Echo Show (Multimodal Screen Experience), Fire TV, and Fire OS / Android Tablets.
 
-Traditional assistants suffer from four fundamental limitations:
+### 🎯 How NOVA Answers Amazon's Hackathon Challenge
+Amazon announced that **Alexa+** leverages the **Model Context Protocol (MCP)** as an open standard for third-party services and agent skills. Because official preview developer toolkits are restricted to select enterprise partners, Amazon challenged hackathon developers to:
+1. **Build a Self-Hosted MCP Server** exposing tools over Streamable HTTP transport.
+2. **Simulate the Alexa+ Experience** using an agentic web application and companion dashboard.
+
+**NOVA AI is the end-to-end realization of this challenge:**
+* **Self-Hosted FastMCP Server:** Implements the official MCP specification (2025-11-25) over **Streamable HTTP** at `http://127.0.0.1:8000/mcp`, exposing tools (`list_devices`, `set_device_state`, `get_energy_summary`, `get_saving_tips`).
+* **Simulated Alexa+ Multimodal Companion:** Designed for screen-equipped Amazon devices like the **Echo Show** and **Fire Tablets**, pairing an authentic **8-State Animated Alexa Eye** with speech recognition/neural synthesis, interactive mission plan review cards, Leaflet GPS maps, and real-time Trust Center auditing.
+* **Agentic Autonomous Mission Mode:** Moves beyond shallow, single-turn voice skills into multi-step goal formulation, human-in-the-loop review, bounded execution, and verified tool postconditions.
+* **Fire OS & Ambient Android Companion:** Via [`mobile_android/NovaForegroundService.kt`](file:///c:/Users/APURVA/OneDrive/Documents/Desktop/Alexa/mobile_android), NOVA brings ambient GPS tracking, screen time supervision, and emergency SOS dispatch to Amazon Fire OS / Android devices.
+
+---
+
+## 📌 Executive Summary & Vision
+
+**NOVA AI (Alexa-Next 2.0)** transforms voice assistants from passive, reactive command-responders into an **autonomous, proactive, and multimodal personal agent**.
+
+Traditional smart assistants suffer from four fundamental limitations:
 1. **Shallow Single-Turn Execution:** They answer trivia or set timers, but cannot plan, decompose, or complete complex multi-step objectives.
 2. **Hallucinated & Unaudited Tool Calls:** Users have zero visibility into what tools are invoked, whether actions succeeded, or how secrets are handled.
 3. **Ephemeral Context & Amnesia:** They forget user routines, critical preferences, and long-term commitments between sessions.
@@ -40,12 +62,12 @@ Traditional assistants suffer from four fundamental limitations:
 
 ```mermaid
 graph TB
-    subgraph Client_Layer [Client & Companion Interface]
-        UI["Modern Web Dashboard (Tailwind, Lucide, Leaflet)"]
+    subgraph Client_Layer [Client & Amazon Echo Show Companion]
+        UI["Echo Show Companion Dashboard (Tailwind, Lucide, Leaflet)"]
         EYE["8-State Dynamic Animated Alexa Eye"]
         VOICE["Web Speech API & Neural Audio Synthesis"]
         MOOD_UI["Empathetic Mood & Tone Banner"]
-        ANDROID["Android Companion Service (GPS, AppLimits, SOS)"]
+        FIRE_OS["Fire OS / Android Background Service (GPS, AppLimits, SOS)"]
     end
 
     subgraph Server_Gateway [FastAPI Gateway & FastMCP Mount]
@@ -84,7 +106,7 @@ graph TB
     UI --> STATIC
     MCP --> TOOLS
     API --> BRAIN
-    ANDROID --> API
+    FIRE_OS --> API
     BRAIN --> GEMINI
     BRAIN --> OPENAI
     BRAIN --> GROQ
@@ -111,7 +133,7 @@ graph TB
 
 ### 1. 🚀 Autonomous Mission Mode (Signature Feature)
 * **Goal Decomposition:** Deconstructs complex user prompts (e.g., *"Help me organize my week, prepare for my midterm assignments, identify conflicts, and create a study plan"*) into verifiable, sequential subtasks.
-* **Interactive Plan Review & Human-in-the-Loop:** Renders plans as editable cards where users can rename steps, delete steps, or reorder them before execution.
+* **Interactive Plan Review & Human-in-the-Loop:** Renders plans as editable cards on the screen where users can rename steps, delete steps, or reorder them before execution.
 * **Consequential Approval Gates:** Requires explicit user sign-off for state-changing or high-impact actions.
 * **Resilient Bounded Execution:** Each step features bounded retries, execution verification checkmarks, and fallback recovery.
 * **Full Persistence:** Missions and steps survive browser reloads and server restarts in SQLite (`missions` and `mission_steps`).
@@ -187,6 +209,7 @@ ALEXA/
 ├── .env                        # Local secrets (ignored by Git)
 ├── .gitignore                  # Git hygiene configuration
 ├── LICENSE                     # Official MIT Open Source License
+├── SUBMISSION.md               # Dedicated Hackathon Submission Dossier for Judges
 ├── core/                       # Core backend logic & services
 │   ├── brain.py                # Multi-LLM reasoner, intent router & deadline extractor
 │   ├── conversation_engine.py  # Multi-turn conversational handler & Gemini integration
@@ -212,12 +235,12 @@ ALEXA/
 │   └── weather_service.py      # Live meteorological data service
 ├── server/
 │   └── app.py                  # Standalone FastMCP server over Streamable HTTP
-├── static/                     # High-performance single-page companion web dashboard
+├── static/                     # High-performance Echo Show style companion dashboard
 │   ├── index.html              # 3-Panel glassmorphism companion dashboard
 │   ├── style.css               # 8-state Animated Alexa Eye & cyber-clean dark theme
 │   └── app.js                  # Speech recognition, audio synth siren, map, & missions
 ├── frontend/                   # Optional React + Vite UI (proxies to FastAPI on :8000)
-├── mobile_android/             # Android companion reference implementation
+├── mobile_android/             # Fire OS / Android companion reference implementation
 │   ├── AndroidManifest_Snippet.xml # Permissions for GPS, SMS & UsageStats
 │   └── NovaForegroundService.kt    # Kotlin background service for GPS & Screen Time
 ├── tests/
@@ -276,7 +299,7 @@ Copy-Item .env.example .env
 cp .env.example .env
 ```
 
-Open `.env` and set your key(s):
+Open `.env` and configure credentials:
 ```env
 # Choose provider: gemini, openai, or compatible (Groq)
 LLM_PROVIDER=gemini
@@ -435,17 +458,17 @@ Follow this 5-minute script to demonstrate NOVA's full capabilities to judges:
 
 ---
 
-## 📱 Mobile Android Companion Architecture
+## 📱 Amazon Fire OS & Mobile Companion Architecture
 
-The repository includes a production-grade native Android service in [`mobile_android/`](file:///c:/Users/APURVA/OneDrive/Documents/Desktop/Alexa/mobile_android):
+The repository includes a production-grade native Android / Fire OS background service in [`mobile_android/`](file:///c:/Users/APURVA/OneDrive/Documents/Desktop/Alexa/mobile_android):
 
 * **`NovaForegroundService.kt`**:
-  * Implements a sticky Android Foreground Service with continuous notification.
-  * Uses Google Play Services `FusedLocationProviderClient` to sync live GPS coordinates with `/api/location/update`.
+  * Implements a sticky Foreground Service with continuous notification designed for Amazon Fire tablets and Android devices.
+  * Uses Google Play Services / Amazon location APIs (`FusedLocationProviderClient`) to sync live GPS coordinates with `/api/location/update`.
   * Monitors application foreground time via `UsageStatsManager` to enforce digital wellbeing limits.
   * Dispatches emergency SMS via `SmsManager` and triggers automated phone calls to emergency services.
 * **`AndroidManifest_Snippet.xml`**:
-  * Contains the necessary Android permissions: `ACCESS_FINE_LOCATION`, `PACKAGE_USAGE_STATS`, `SEND_SMS`, `CALL_PHONE`, `FOREGROUND_SERVICE_LOCATION`.
+  * Contains the necessary permissions: `ACCESS_FINE_LOCATION`, `PACKAGE_USAGE_STATS`, `SEND_SMS`, `CALL_PHONE`, `FOREGROUND_SERVICE_LOCATION`.
 
 ---
 
@@ -460,6 +483,7 @@ The repository includes a production-grade native Android service in [`mobile_an
 
 ## 👥 Hackathon Team & Acknowledgements
 
-* **Developed for:** Next-Gen AI Assistant Hackathon
-* **Technologies:** Google Gemini 3.8 Flash, Multi-LLM Engine, FastAPI, FastMCP (Model Context Protocol), SQLite, TailwindCSS, Lucide, Leaflet
+* **Hackathon:** [Build, Ship, Shape: Amazon Developer Hackathon](https://amazonappdev2026.devpost.com/)
+* **Category Track:** Alexa+ (Agentic Experiences & Self-Hosted MCP Servers)
+* **Technologies:** Google Gemini 3.8 Flash, Multi-LLM Engine, FastAPI, FastMCP (Model Context Protocol), SQLite, TailwindCSS, Lucide, Leaflet, Android Kotlin
 * **License:** [MIT License](LICENSE)
