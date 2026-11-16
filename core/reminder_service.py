@@ -17,13 +17,17 @@ class ReminderService:
 
     def add_reminder(self, title: str, due_time: str, recurring: str = "none") -> Dict[str, Any]:
         """Creates a new persistent reminder."""
+        clean_due = due_time.strip().replace("T", " ")
+        if len(clean_due) == 10 and clean_due.count("-") == 2:
+            clean_due = f"{clean_due} 18:00"
+        clean_title = title.strip()
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT id, title, due_time, recurring, status, delivered FROM reminders "
                 "WHERE lower(trim(title)) = lower(trim(?)) AND due_time = ? AND status = 'pending' "
                 "ORDER BY id DESC LIMIT 1",
-                (title.strip(), due_time.strip())
+                (clean_title, clean_due)
             )
             existing = cursor.fetchone()
             if existing:
@@ -35,14 +39,14 @@ class ReminderService:
             cursor.execute("""
                 INSERT INTO reminders (title, due_time, recurring, status, delivered)
                 VALUES (?, ?, ?, 'pending', 0)
-            """, (title.strip(), due_time.strip(), recurring))
+            """, (clean_title, clean_due, recurring))
             conn.commit()
             new_id = cursor.lastrowid
 
         return {
             "id": new_id,
-            "title": title,
-            "due_time": due_time,
+            "title": clean_title,
+            "due_time": clean_due,
             "recurring": recurring,
             "status": "pending",
             "delivered": False
@@ -59,9 +63,15 @@ class ReminderService:
         reminders = []
         for r in rows:
             is_due = False
+            raw_due = (r["due_time"] or "").replace("T", " ")
             try:
-                dt = datetime.strptime(r["due_time"][:16], "%Y-%m-%d %H:%M")
-                if dt <= now and r["status"] == "pending":
+                if len(raw_due) >= 16:
+                    dt = datetime.strptime(raw_due[:16], "%Y-%m-%d %H:%M")
+                elif len(raw_due) == 10:
+                    dt = datetime.strptime(raw_due, "%Y-%m-%d")
+                else:
+                    dt = None
+                if dt and dt <= now and r["status"] == "pending":
                     is_due = True
             except Exception:
                 pass

@@ -42,6 +42,8 @@ from .music_service import music_service
 from .alarm_timer_service import alarm_timer_service
 from .news_service import news_service
 from .reminder_service import reminder_service
+from .alexa_devices import alexa_devices
+from .game_service import game_service
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +68,8 @@ class NovaBrain:
         self.music = music_service
         self.alarms = alarm_timer_service
         self.news = news_service
+        self.alexa_devices = alexa_devices
+        self.games = game_service
 
         # Select the general conversation provider. Tooling and multimodal
         # integrations can still use Gemini independently when its key exists.
@@ -411,6 +415,21 @@ class NovaBrain:
         5. Persists conversation history.
         """
         clean_text = user_text.strip()
+        if not clean_text:
+            speech = "I'm listening! What can I help you with today?"
+            return {
+                "speech_reply": speech,
+                "display_reply": speech,
+                "reply": speech,
+                "mood": {"primary_mood": "calm", "detected_emotions": []},
+                "type": "conversation",
+                "media": None,
+                "location": {
+                    "coords": self.location_service.last_known_coords,
+                    "address": self.location_service.last_known_address
+                },
+                "mission_plan": None
+            }
         lowered = clean_text.lower()
 
         # Save user message to persistent conversation store
@@ -506,7 +525,9 @@ class NovaBrain:
         # --- 3. SMART HOME IOT CONTROL (Active Execution - Rock Solid Pattern Matching) ---
         # Detect if any smart home appliance is referenced
         target_dev = None
-        if any(w in lowered for w in ["tv", "television", "smart tv", "smart television"]):
+        if any(w in lowered for w in ["fire tv", "firetv", "firestick", "fire stick"]):
+            target_dev = None
+        elif any(w in lowered for w in ["tv", "television", "smart tv", "smart television"]):
             target_dev = "television"
         elif any(w in lowered for w in ["fan", "bedroom fan", "ceiling fan"]):
             target_dev = "bedroom_fan"
@@ -555,6 +576,157 @@ class NovaBrain:
                     "devices": self.smart_home.list_devices(),
                     "energy": energy
                 },
+                "media": None,
+                "location": current_location
+            }
+            self.conversation_mgr.append_message(conversation_id, "assistant", display, reply_payload)
+            return reply_payload
+
+
+        # --- 3B. ALEXA ECOSYSTEM: FIRE TV, RING DOORBELL & ECOBEE THERMOSTAT ---
+        is_firetv_intent = any(w in lowered for w in [
+            "fire tv", "firetv", "prime video", "netflix on tv", "fire tv remote",
+            "pause tv", "pause fire tv", "play fire tv", "resume fire tv", "tv volume"
+        ])
+        is_ring_intent = any(w in lowered for w in [
+            "ring doorbell", "ring camera", "front door", "who is at the door",
+            "doorbell chime", "ring the bell", "ring security", "doorbell camera", "talk to visitor"
+        ])
+        is_ecobee_intent = any(w in lowered for w in [
+            "ecobee", "thermostat", "indoor temperature", "room temp", "room temperature",
+            "set temperature", "set temp", "set thermostat", "eco mode", "cool mode", "heat mode"
+        ])
+
+        if is_firetv_intent:
+            action = "power"
+            param = None
+            if any(w in lowered for w in ["turn off", "power off", "shut down", "switch off"]):
+                action = "power"
+                param = "off"
+            elif any(w in lowered for w in ["turn on", "power on", "switch on"]):
+                action = "power"
+                param = "on"
+            if any(w in lowered for w in ["netflix", "prime video", "prime", "youtube", "disney"]):
+                action = "app"
+                if "netflix" in lowered: param = "Netflix"
+                elif "youtube" in lowered: param = "YouTube"
+                elif "disney" in lowered: param = "Disney+"
+                else: param = "Prime Video"
+            elif any(w in lowered for w in ["pause", "stop"]):
+                action = "playback"
+                param = "pause"
+            elif any(w in lowered for w in ["play", "resume"]):
+                action = "playback"
+                param = "play"
+            elif "volume up" in lowered or "louder" in lowered:
+                action = "volume"
+                param = 5
+            elif "volume down" in lowered or "softer" in lowered:
+                action = "volume"
+                param = -5
+            elif "mute" in lowered:
+                action = "mute"
+
+            res = self.alexa_devices.fire_tv_action(action, param)
+            tv = res["fire_tv"]
+            speech = res["message"]
+            display = (
+                f"📺 **Amazon Fire TV 4K Max**\n"
+                f"- **Status**: {'Powered ON' if tv['power'] else 'Powered OFF'} • Active App: **{tv['current_app']}**\n"
+                f"- **Now Playing**: {tv['now_playing']['title']} ({tv['now_playing']['quality']})\n"
+                f"- **Playback**: {tv['playback_state'].capitalize()} • Volume: **{tv['volume']}%**\n"
+                f"- *Control action*: {res['message']}"
+            )
+            reply_payload = {
+                "speech_reply": speech,
+                "display_reply": display,
+                "reply": speech,
+                "mood": mood_data,
+                "type": "alexa_ecosystem",
+                "subtype": "fire_tv",
+                "ecosystem": self.alexa_devices.get_all_ecosystem_devices(),
+                "device_result": res,
+                "media": None,
+                "location": current_location
+            }
+            self.conversation_mgr.append_message(conversation_id, "assistant", display, reply_payload)
+            return reply_payload
+
+        if is_ring_intent:
+            action = "chime" if any(w in lowered for w in ["ring the chime", "ring chime", "sound chime", "press doorbell", "ring bell", "ring the bell"]) else (
+                "talk" if any(w in lowered for w in ["talk", "speak", "visitor", "intercom"]) else "view"
+            )
+            if action != "view":
+                res = self.alexa_devices.ring_action(action)
+            else:
+                res = {"ok": True, "message": "Streaming live Front Door camera feed.", "ring_doorbell": self.alexa_devices.devices["ring_doorbell"]}
+
+            ring = res["ring_doorbell"]
+            speech = res["message"]
+            display = (
+                f"🔔 **Ring Video Doorbell Pro (Front Door)**\n"
+                f"- **Live Camera**: HD 1080p Active Stream • Battery: **{ring['battery']}%**\n"
+                f"- **Security Mode**: **{ring['security_mode'].upper()}** • WiFi: {ring['wifi_rssi']}\n"
+                f"- **Last Event**: {ring['recent_events'][0]['event']} ({ring['recent_events'][0]['time']})\n"
+                f"- **2-Way Talk**: {'Active (Speaking)' if ring.get('two_way_talk_active') else 'Standby'}"
+            )
+            reply_payload = {
+                "speech_reply": speech,
+                "display_reply": display,
+                "reply": speech,
+                "mood": mood_data,
+                "type": "alexa_ecosystem",
+                "subtype": "ring",
+                "ecosystem": self.alexa_devices.get_all_ecosystem_devices(),
+                "device_result": res,
+                "media": None,
+                "location": current_location
+            }
+            self.conversation_mgr.append_message(conversation_id, "assistant", display, reply_payload)
+            return reply_payload
+
+        if is_ecobee_intent:
+            temp_match = re.search(r"\b(\d{1,2}(?:\.\d+)?)\s*(?:degrees?|°|c|f)?\b", lowered)
+            action = "view"
+            param = None
+            if temp_match and any(w in lowered for w in ["set", "make", "turn", "put", "degrees", "temperature", "temp", "to"]):
+                action = "set_temp"
+                param = float(temp_match.group(1))
+            elif any(w in lowered for w in ["eco mode", "energy saving", "save energy"]) or re.search(r"\beco\b", lowered):
+                action = "eco"
+            elif "cool" in lowered or "ac" in lowered:
+                action = "hvac_mode"
+                param = "cool"
+            elif "heat" in lowered:
+                action = "hvac_mode"
+                param = "heat"
+            elif "fan" in lowered:
+                action = "fan" 
+
+            if action != "view":
+                res = self.alexa_devices.ecobee_action(action, param)
+            else:
+                eco = self.alexa_devices.devices["ecobee_thermostat"]
+                res = {"ok": True, "message": f"Indoor temperature is {eco['current_temp']}°C. Target is set to {eco['target_temp']}°C in {eco['hvac_mode'].upper()} mode.", "ecobee": eco}
+
+            eco = res["ecobee"]
+            speech = res["message"]
+            display = (
+                f"🌡️ **Ecobee Smart Thermostat Premium**\n"
+                f"- **Current Temp**: **{eco['current_temp']}°C** • Target Setpoint: **{eco['target_temp']}°C**\n"
+                f"- **HVAC Mode**: **{eco['hvac_mode'].upper()}** • Fan: **{eco['fan_mode'].upper()}**\n"
+                f"- **Indoor Humidity**: **{eco['humidity']}%** • Air Quality: **{eco['air_quality']}**\n"
+                f"- **Eco Mode**: {'Enabled (Energy Saving Active)' if eco['eco_mode'] else 'Disabled'}"
+            )
+            reply_payload = {
+                "speech_reply": speech,
+                "display_reply": display,
+                "reply": speech,
+                "mood": mood_data,
+                "type": "alexa_ecosystem",
+                "subtype": "ecobee",
+                "ecosystem": self.alexa_devices.get_all_ecosystem_devices(),
+                "device_result": res,
                 "media": None,
                 "location": current_location
             }
@@ -753,28 +925,45 @@ class NovaBrain:
             self.conversation_mgr.append_message(conversation_id, "assistant", display, reply_payload)
             return reply_payload
 
-        # --- 9. LIVE WEATHER & SURROUNDING TEMPERATURE/HUMIDITY ---
+        # --- 9. LIVE WEATHER & SURROUNDING TEMPERATURE/HUMIDITY (ANY CITY/COUNTRY) ---
         is_weather_intent = any(w in lowered for w in [
             "weather", "temperature", "humidity", "surrounding temperature",
             "how hot", "what's the weather", "current weather", "surrounding weather",
-            "climate", "forecast", "temp outside", "is it raining"
+            "climate", "forecast", "temp outside", "is it raining", "is it snowing",
+            "is it sunny", "is it cold", "temp in", "weather in", "weather of", "weather for"
         ])
         if is_weather_intent:
-            logger.info("Live weather & surroundings requested: '%s'", clean_text)
-            w_data = self.weather.get_weather()
-            speech = (
-                f"The surrounding temperature is {w_data['temperature']} degrees Celsius with {w_data['humidity']}% humidity "
-                f"and {w_data['description']}. It feels like {w_data['feels_like']} degrees."
-            )
+            target_place = self.weather.extract_weather_location(clean_text)
+            logger.info("Live weather requested for place='%s' (query: '%s')", target_place, clean_text)
+
+            if target_place:
+                w_data = self.weather.get_weather(place=target_place)
+            else:
+                coords = current_location.get("coords", {}) if isinstance(current_location, dict) else {}
+                w_data = self.weather.get_weather(
+                    lat=coords.get("lat"),
+                    lon=coords.get("lng")
+                )
+
+            loc_title = f"{w_data.get('city', 'Selected Location')}"
+            if w_data.get("country") and w_data.get("country").lower() not in loc_title.lower():
+                loc_title += f", {w_data['country']}"
+
+            speech = self.weather.format_weather_summary(w_data)
             display = (
-                f"⛅ **Surrounding Weather & Environment**\n"
-                f"- **Location**: {w_data.get('city', 'Local Area')}, {w_data.get('country', '')}\n"
+                f"⛅ **Live Weather & Atmospheric Conditions**\n"
+                f"- **Location**: **{loc_title}**\n"
                 f"- **Temperature**: **{w_data['temperature']}°C** (Feels like **{w_data['feels_like']}°C**)\n"
+                f"- **Condition**: {w_data.get('description', 'Clear sky').capitalize()} ({w_data.get('condition', 'Clear')})\n"
                 f"- **Humidity**: **{w_data['humidity']}%**\n"
-                f"- **Condition**: {w_data['description'].title()}\n"
-                f"- **Wind**: {w_data['wind_speed']} m/s | **Pressure**: {w_data['pressure']} hPa\n"
-                f"- **High / Low**: {w_data['temp_max']}°C / {w_data['temp_min']}°C"
+                f"- **Wind Speed**: **{w_data['wind_speed']} m/s** | **Pressure**: {w_data['pressure']} hPa\n"
+                f"- **Daily Range**: Low **{w_data.get('temp_min', w_data['temperature'])}°C** / High **{w_data.get('temp_max', w_data['temperature'])}°C**\n"
+                f"- *Source*: {w_data.get('source', 'Live Meteorological Station')}"
             )
+            target_coords = {
+                "lat": w_data.get("latitude") or (current_location.get("coords", {}).get("lat") if isinstance(current_location, dict) else None),
+                "lng": w_data.get("longitude") or (current_location.get("coords", {}).get("lng") if isinstance(current_location, dict) else None)
+            }
             reply_payload = {
                 "speech_reply": speech,
                 "display_reply": display,
@@ -782,74 +971,139 @@ class NovaBrain:
                 "mood": mood_data,
                 "type": "weather",
                 "weather": w_data,
-                "location": current_location,
+                "location": {
+                    "coords": target_coords,
+                    "address": loc_title
+                },
                 "media": None
             }
             self.conversation_mgr.append_message(conversation_id, "assistant", display, reply_payload)
             return reply_payload
 
-        # --- 10. MUSIC & ENTERTAINMENT (\"NOVA! PLAY MY FAVOURITE SONGS!\") ---
-        is_music_intent = any(w in lowered for w in [
-            "play my favourite songs", "play favourite songs", "play my favorite songs", "play favorite songs",
-            "play my favourite song", "play my favorite song", "play music", "play some songs",
-            "play songs", "play song", "start music", "play track", "music player"
-        ])
-        is_pause_music = any(w in lowered for w in ["pause music", "stop music", "pause the song", "stop song"])
-        is_next_music = any(w in lowered for w in ["next song", "skip song", "next track", "skip track"])
+        # --- 9B. INSTANT PLAYABLE ARCADE GAMES ---
+        is_game, game_action, game_id = self.games.extract_game_intent(clean_text)
+        if is_game:
+            selected_game = self.games.get_game_by_id(game_id) or self.games.catalog[0]
+            if game_id == "snake":
+                speech = "Starting Cyber Snake Arcade for you! Use arrow keys or on-screen buttons to slither and collect energy crystals."
+            elif game_id == "tictactoe":
+                speech = "Let's play Tic-Tac-Toe against my AI! You are X, and I'll play as O. Make your first move on the grid."
+            elif game_id == "trivia":
+                speech = "Starting the Nova Trivia Challenge! Let's see how many questions you can answer correctly."
+            elif game_id == "space":
+                speech = "Launching Cosmic Asteroid Dodge! Steer your ship and blast through the asteroid field."
+            else:
+                speech = f"Welcome to the Nova Gaming Arcade! I'm launching {selected_game['title']} for you now."
 
-        if is_pause_music:
-            m_res = self.music.pause()
-            speech = "I've paused music playback."
-            display = "⏸️ **Music Paused**"
+            display = (
+                f"🎮 **Nova Gaming Arcade — {selected_game['icon']} {selected_game['title']}**\n"
+                f"- **Genre**: {selected_game['genre']} • **Mode**: {selected_game['difficulty']}\n"
+                f"- **Controls**: {selected_game['controls']}\n"
+                f"- **Description**: {selected_game['description']}\n\n"
+                f"🕹️ *Game launched! You can play directly on screen, switch games, or restart anytime.*"
+            )
+
             reply_payload = {
                 "speech_reply": speech,
                 "display_reply": display,
                 "reply": speech,
                 "mood": mood_data,
-                "type": "music",
-                "music": m_res,
+                "type": "game",
+                "game_id": selected_game["id"],
+                "game_title": selected_game["title"],
+                "game_info": selected_game,
+                "catalog": self.games.get_catalog(),
                 "location": current_location,
                 "media": None
             }
             self.conversation_mgr.append_message(conversation_id, "assistant", display, reply_payload)
             return reply_payload
 
-        if is_next_music:
-            m_res = self.music.next_track()
-            track = m_res["track"]
-            speech = f"Skipping to next favourite track: '{track['title']}' by {track['artist']}."
-            display = (
-                f"⏭️ **Next Track Playing**\n"
-                f"- **Title**: {track['title']}\n"
-                f"- **Artist**: {track['artist']}\n"
-                f"- **Album**: {track['album']}\n"
-                f"- **Genre**: {track['genre']}"
-            )
-            reply_payload = {
-                "speech_reply": speech,
-                "display_reply": display,
-                "reply": speech,
-                "mood": mood_data,
-                "type": "music",
-                "music": m_res,
-                "location": current_location,
-                "media": None
-            }
-            self.conversation_mgr.append_message(conversation_id, "assistant", display, reply_payload)
-            return reply_payload
+        # --- 10. UNIVERSAL MUSIC & SPOTIFY/YOUTUBE STREAMING ---
+        is_music_query = any(w in lowered for w in [
+            "play", "listen to", "song", "track", "music", "spotify", "playlist", "put on"
+        ]) and not any(w in lowered for w in ["fire tv", "game", "mission", "weather", "alarm", "timer", "device"])
 
-        if is_music_intent:
-            logger.info("Music playback intent triggered: '%s'", clean_text)
-            m_res = self.music.play_favourite_songs()
-            track = m_res["track"]
-            speech = f"Playing your favourite songs now! 🎵 Here is '{track['title']}' by {track['artist']}."
-            display = (
-                f"🎵 **Now Playing: Favourite Songs**\n"
-                f"- **Track**: {track['title']}\n"
-                f"- **Artist**: {track['artist']}\n"
-                f"- **Album**: {track['album']} • {track['genre']}\n"
-                f"- **Stream**: High-fidelity stream active"
-            )
+        if is_music_query:
+            is_full_music_explanation = any(w in lowered for w in [
+                "why it is not plye the full", "why is it not playing the full", "why not full music",
+                "why not full song", "why only 30 seconds", "why 30 sec", "how to play full song",
+                "play the full music", "play full song", "play full music"
+            ])
+            if is_full_music_explanation:
+                cur_track = self.music.current_track or self.music.tracks[0]
+                speech = (
+                    "Due to copyright licensing by major record labels, public streaming APIs are legally limited to 30-second previews. "
+                    "However, you can play the complete full-length song right inside Nova by clicking the 'Full Song' button, or by streaming directly on Spotify."
+                )
+                display = (
+                    "ℹ️ **Why Commercial Music Streams as a 30s Preview & How to Play Full:**\n\n"
+                    "1. **Copyright & Licensing Restrictions**:\n"
+                    "   - Major music labels (Sony, Universal, Warner) do not allow raw, DRM-free full MP3 audio downloads through free public APIs (like Apple iTunes or Deezer).\n"
+                    "   - Public APIs legally provide **30-second high-fidelity preview snippets**.\n\n"
+                    "2. **How to Play the 100% Complete Full Song in Nova**:\n"
+                    f"   - **▶️ In-App Full Song Player**: Click the **Full Song** button on the bottom music player or in the music modal to launch the complete YouTube player directly inside the website!\n"
+                    f"   - **🟢 Spotify App & Web**: Click **[Open in Spotify]({cur_track.get('spotify_url')})** to stream the complete full song with synchronized lyrics in your Spotify app.\n"
+                    f"   - **▶️ YouTube Music**: Click **[YouTube Music]({cur_track.get('youtube_url')})** for full albums and videos.\n\n"
+                    f"🎵 **Current Song**: **{cur_track.get('title')}** by **{cur_track.get('artist')}**"
+                )
+                reply_payload = {
+                    "speech_reply": speech,
+                    "display_reply": display,
+                    "reply": speech,
+                    "mood": mood_data,
+                    "type": "music_explanation",
+                    "current_track": cur_track,
+                    "location": current_location,
+                    "media": None
+                }
+                self.conversation_mgr.append_message(conversation_id, "assistant", display, reply_payload)
+                return reply_payload
+
+            action, song_query = self.music.extract_music_query(clean_text)
+            logger.info("Universal music request action=%s query='%s'", action, song_query)
+
+            if action == "pause":
+                m_res = self.music.pause()
+                speech = "I've paused music playback."
+                display = "⏸️ **Music Paused**"
+            elif action == "resume":
+                m_res = self.music.resume_music()
+                track = m_res["track"]
+                speech = f"Resuming '{track['title']}' by {track['artist']}."
+                display = f"▶️ **Resumed**: **{track['title']}** by *{track['artist']}*"
+            elif action == "next":
+                m_res = self.music.next_track()
+                track = m_res["track"]
+                speech = f"Playing next track: '{track['title']}' by {track['artist']}."
+                display = f"⏭️ **Next Track**: **{track['title']}** by *{track['artist']}*"
+            elif action == "prev":
+                m_res = self.music.previous_track()
+                track = m_res["track"]
+                speech = f"Playing previous track: '{track['title']}' by {track['artist']}."
+                display = f"⏮️ **Previous Track**: **{track['title']}** by *{track['artist']}*"
+            elif action == "search" and song_query:
+                m_res = self.music.search_and_play(song_query)
+                track = m_res["track"]
+                speech = f"Playing '{track['title']}' by {track['artist']}. Connecting live audio stream and Spotify."
+                display = (
+                    f"🎵 **Now Playing on Nova Music Hub**\n"
+                    f"- **Track**: **{track['title']}**\n"
+                    f"- **Artist**: **{track['artist']}** • *{track.get('album', 'Single')}*\n"
+                    f"- **Live Stream**: Direct in-browser high-fidelity playback\n"
+                    f"- **App Connections**: [🟢 Open in Spotify]({track.get('spotify_url')}) • [▶️ YouTube Music]({track.get('youtube_url')}) • [🍎 Apple Music]({track.get('apple_url')})"
+                )
+            else:
+                m_res = self.music.play_favourite_songs()
+                track = m_res["track"]
+                speech = f"Playing your favorite playlist! Here is '{track['title']}' by {track['artist']}."
+                display = (
+                    f"🎵 **Now Playing: Curated Playlist**\n"
+                    f"- **Track**: **{track['title']}**\n"
+                    f"- **Artist**: **{track['artist']}** • *{track.get('genre', 'Ambient')}*\n"
+                    f"- **App Connections**: [🟢 Open in Spotify]({track.get('spotify_url')}) • [▶️ YouTube Music]({track.get('youtube_url')})"
+                )
+
             reply_payload = {
                 "speech_reply": speech,
                 "display_reply": display,
@@ -942,9 +1196,12 @@ class NovaBrain:
             rem_text = re.sub(r"(?i)^(?:can you\s+)?(?:please\s+)?(?:remind me to|set reminder for|add reminder to)\s*", "", clean_text).strip()
             if not rem_text:
                 rem_text = "Important task reminder"
-            rem_res = self.alarms.add_reminder(text=rem_text, time_str="Today 18:00")
-            speech = f"I will remind you to {rem_text}."
-            display = f"🔔 **Reminder Set**: {rem_text}"
+            target_dt = self._parse_deadline_datetime(clean_text) or (datetime.now() + timedelta(hours=2))
+            target_str = target_dt.strftime("%Y-%m-%d %H:%M")
+            rem_res = self.alarms.add_reminder(text=rem_text, time_str=target_str)
+            persistent_rem = reminder_service.add_reminder(rem_text, target_str)
+            speech = f"I will remind you to {rem_text} at {target_str}."
+            display = f"🔔 **Reminder Set**: {rem_text} (Scheduled for {target_str})"
             reply_payload = {
                 "speech_reply": speech,
                 "display_reply": display,
@@ -953,6 +1210,7 @@ class NovaBrain:
                 "type": "alarms",
                 "alarms_data": self.alarms.get_all(),
                 "created_item": rem_res,
+                "persistent_reminder": persistent_rem,
                 "location": current_location,
                 "media": None
             }
@@ -981,15 +1239,18 @@ class NovaBrain:
             self.conversation_mgr.append_message(conversation_id, "assistant", display, reply_payload)
             return reply_payload
 
-        # --- 12. WEATHER, NEWS & DAILY BRIEFING ---
+        # --- 12. LIVE NEWS PLATFORMS & EXECUTIVE BRIEFINGS ---
         is_briefing_intent = any(w in lowered for w in [
-            "daily briefing", "morning briefing", "briefing", "daily update",
-            "news briefing", "brief me", "executive briefing", "what's the news",
-            "latest news", "today's briefing", "news update"
+            "daily briefing", "morning briefing", "brief me", "executive briefing", "today's briefing"
         ])
+        is_news_intent = any(w in lowered for w in [
+            "news", "headline", "headlines", "breaking news", "current events", "what's happening", "latest news"
+        ])
+
         if is_briefing_intent:
-            logger.info("Daily briefing generated for user: '%s'", clean_text)
-            w_data = self.weather.get_weather()
+            logger.info("Executive Daily Briefing generated for: '%s'", clean_text)
+            coords = current_location.get("coords", {}) if isinstance(current_location, dict) else {}
+            w_data = self.weather.get_weather(lat=coords.get("lat"), lon=coords.get("lng"))
             tasks = self.planner.get_deadlines()
             energy = self.smart_home.get_energy_summary()
             briefing = self.news.generate_daily_briefing(w_data, tasks, energy)
@@ -1007,6 +1268,86 @@ class NovaBrain:
                 "media": None
             }
             self.conversation_mgr.append_message(conversation_id, "assistant", display, reply_payload)
+            return reply_payload
+
+        if is_news_intent:
+            category, topic = self.news.extract_news_intent(clean_text)
+            logger.info("Live news requested category=%s topic=%s", category, topic)
+            articles = self.news.get_news(category=category, topic=topic, limit=4)
+            cat_label = topic.title() if topic else category.title()
+            speech = self.news.format_news_speech(articles, category_label=f"{cat_label} Headlines")
+
+            lines = [f"📰 **Live {cat_label} News Headlines** (Google News & BBC)\n"]
+            for art in articles:
+                lines.append(f"- **[{art['title']}]({art['link']})**\n  *Source: {art['source']} • {art.get('published', 'Recent')}*")
+            display = "\n".join(lines)
+
+            reply_payload = {
+                "speech_reply": speech,
+                "display_reply": display,
+                "reply": speech,
+                "mood": mood_data,
+                "type": "news",
+                "news_items": articles,
+                "category": cat_label,
+                "location": current_location,
+                "media": None
+            }
+            self.conversation_mgr.append_message(conversation_id, "assistant", display, reply_payload)
+            return reply_payload
+
+        # --- 12B. CONVERSATION LIFECYCLE MANAGEMENT (DELETE, CLEAR, RESET) ---
+        is_clear_all_conversations = any(w in lowered for w in [
+            "delete all conversations", "clear all conversations", "delete all chats",
+            "clear all chats", "delete chat history", "clear chat history", "delete all my conversations",
+            "erase all conversations"
+        ])
+        is_delete_conversation = any(w in lowered for w in [
+            "delete this conversation", "delete conversation", "delete chat",
+            "delete this chat", "clear this chat", "clear chat", "clear this conversation",
+            "clear conversation", "erase this conversation", "remove this conversation"
+        ])
+
+        if is_clear_all_conversations:
+            self.conversation_mgr.clear_all_conversations()
+            speech = "I have cleared all conversation threads and message history. Starting a fresh session for you."
+            display = (
+                "🗑️ **All Conversations Cleared**\n"
+                "- **Status**: All saved threads and chat history have been permanently deleted.\n"
+                "- **Active Session**: New clean session started."
+            )
+            reply_payload = {
+                "speech_reply": speech,
+                "display_reply": display,
+                "reply": speech,
+                "mood": mood_data,
+                "type": "all_conversations_deleted",
+                "active_session": "default-session",
+                "location": current_location,
+                "media": None
+            }
+            return reply_payload
+
+        if is_delete_conversation:
+            self.conversation_mgr.delete_conversation(conversation_id)
+            speech = "I have deleted this conversation and cleared its messages. Starting a new chat session."
+            display = (
+                "🗑️ **Conversation Deleted**\n"
+                f"- **Thread ID**: `{conversation_id}`\n"
+                "- **Status**: Conversation and messages deleted.\n"
+                "- Ready for a new topic."
+            )
+            reply_payload = {
+                "speech_reply": speech,
+                "display_reply": display,
+                "reply": speech,
+                "mood": mood_data,
+                "type": "conversation_deleted",
+                "deleted_id": conversation_id,
+                "active_session": "default-session",
+                "location": current_location,
+                "media": None
+            }
             return reply_payload
 
         # --- 13. GENERAL CONVERSATION & GEMINI REASONING ---
@@ -1141,13 +1482,10 @@ class NovaBrain:
 
         # Fallback to local conversation engine
         if not speech:
-            if provider_error:
-                speech = "I can’t generate a chat answer right now because the configured AI provider is unavailable. Please check its quota or configure another working provider."
-                display_reply = speech
-            else:
-                conv_res = self.conversation.generate_response(clean_text, mood_data, current_location)
-                speech = conv_res["speech"]
-                display_reply = conv_res.get("display", speech)
+            conv_res = self.conversation.generate_response(clean_text, mood_data, current_location)
+            speech = conv_res["speech"]
+            display_reply = conv_res.get("display", speech)
+            response_source = "offline_fallback"
 
         # --- 10. CRITICAL MEDIA FIX: ONLY fetch media when user EXPLICITLY asks for images or videos! ---
         media = None

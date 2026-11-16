@@ -11,7 +11,10 @@
     <!-- Leaflet Map CSS & JS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <link rel="stylesheet" href="style.css">
+    <!-- Three.js 3D Engine for Nova Robot Avatar -->
+    <script src="three.min.js"></script>
+    <script>if (typeof THREE === "undefined") { document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script>'); }</script>
+    <link rel="stylesheet" href="style.css?v=2.4.0">
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans selection:bg-cyan-500 selection:text-black">
 
@@ -90,6 +93,18 @@
                         <i data-lucide="calendar-check" class="w-4 h-4 text-indigo-400"></i>
                         <span>Tasks & Deadlines</span>
                     </button>
+                                        <button id="navTabEcosystem" class="nav-tab-btn w-full" data-tab="ecosystem">
+                        <i data-lucide="tv-2" class="w-4 h-4 text-orange-400"></i>
+                        <span>Alexa Devices (Fire TV / Ring / Bee)</span>
+                    </button>
+                    <button id="navTabArcade" class="nav-tab-btn w-full" onclick="openGameArcadeModal()">
+                        <i data-lucide="gamepad-2" class="w-4 h-4 text-purple-400"></i>
+                        <span>Gaming Arcade (Snake / Trivia)</span>
+                    </button>
+                    <button id="navTabSos" class="nav-tab-btn w-full" data-tab="sos">
+                        <i data-lucide="shield-alert" class="w-4 h-4 text-red-400"></i>
+                        <span>Emergency SOS &amp; ICE Card</span>
+                    </button>
                     <button id="navTabSmarthome" class="nav-tab-btn w-full" data-tab="smarthome">
                         <i data-lucide="zap" class="w-4 h-4 text-amber-300"></i>
                         <span>Smart Home IoT</span>
@@ -106,7 +121,10 @@
 
                 <!-- Saved Conversations List -->
                 <div class="space-y-1.5 pt-2 border-t border-slate-800/80">
-                    <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-2">Recent Threads</div>
+                    <div class="flex items-center justify-between px-2">
+                        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Recent Threads</div>
+                        <button onclick="clearAllConversations()" class="text-[10px] text-slate-500 hover:text-red-400 transition" title="Clear all saved threads">Clear All</button>
+                    </div>
                     <div id="conversationsList" class="space-y-1 text-xs max-h-36 overflow-y-auto pr-1">
                         <!-- Populated dynamically via JS -->
                     </div>
@@ -128,12 +146,40 @@
         <!-- ===================================================================== -->
         <main class="flex-1 flex flex-col overflow-y-auto p-4 md:p-6 space-y-4 max-w-5xl mx-auto w-full">
 
-            <!-- 1. Voice Orb & Animated Alexa Eye Visualizer -->
+            <!-- 1. 3D Animated Robot Avatar & Voice Visualizer -->
             <div class="relative overflow-hidden rounded-2xl bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border border-slate-800 p-5 flex flex-col items-center justify-center text-center shadow-2xl">
-                <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(6,182,212,0.12)_0,transparent_70%)] pointer-events-none"></div>
+                <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(6,182,212,0.14)_0,transparent_70%)] pointer-events-none"></div>
 
-                <!-- 8-State Animated Alexa Eye Core -->
-                <div id="voiceOrb" class="state-idle mb-3" title="Click to speak with NOVA">
+                <!-- Top Avatar Bar with Controls -->
+                <div class="w-full flex items-center justify-between mb-1 z-20">
+                    <div class="flex items-center space-x-2">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-cyan-950 text-cyan-300 border border-cyan-800">
+                            <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse mr-1.5"></span>
+                            3D Animated Alexa Companion
+                        </span>
+                    </div>
+                    <div class="flex items-center space-x-1.5">
+                        <button id="toggleAvatarBtn" type="button" class="text-[10px] px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-cyan-300 border border-slate-700 transition flex items-center space-x-1" title="Toggle 3D Robot / Classic Orb">
+                            <i data-lucide="bot" class="w-3.5 h-3.5"></i>
+                            <span id="avatarModeLabel">3D Bot</span>
+                        </button>
+                        <button id="waveAvatarBtn" type="button" class="text-[10px] px-2 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-amber-300 border border-slate-700 transition flex items-center space-x-1" title="Wave Hello">
+                            <span>👋</span>
+                            <span>Wave</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 3D Robot Avatar WebGL Canvas (Matches User Uploaded Design) -->
+                <div id="avatar3DContainer" class="w-full max-w-xs h-60 mx-auto relative cursor-pointer flex items-center justify-center" title="Click to interact with NOVA 3D Robot">
+                    <div id="avatarFallback" class="relative flex flex-col items-center justify-center animate-bounce-subtle">
+                        <img src="assets/nova-avatar.png" alt="Nova 3D Robot Avatar" class="w-52 h-52 object-contain drop-shadow-[0_12px_28px_rgba(6,182,212,0.55)] transition-transform hover:scale-105 select-none" />
+                        <div class="absolute -bottom-1 w-32 h-3.5 bg-cyan-400/25 rounded-full blur-sm"></div>
+                    </div>
+                </div>
+
+                <!-- 8-State Animated Alexa Eye Core (Fallback / Toggleable) -->
+                <div id="voiceOrb" class="state-idle mb-3 hidden" title="Click to speak with NOVA">
                     <div class="eye-aura"></div>
                     <div class="eye-orbit-ring"></div>
                     <div class="eye-iris">
@@ -192,6 +238,22 @@
                         <span>📍</span>
                         <span>Location</span>
                     </button>
+                    <button class="text-xs px-2.5 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-orange-300 border border-orange-700/40 transition flex items-center space-x-1" onclick="openEcosystemModal('fire_tv')">
+                        <span>📺</span>
+                        <span>Fire TV</span>
+                    </button>
+                    <button class="text-xs px-2.5 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-cyan-300 border border-cyan-700/40 transition flex items-center space-x-1" onclick="openEcosystemModal('ring')">
+                        <span>🔔</span>
+                        <span>Ring Doorbell</span>
+                    </button>
+                    <button class="text-xs px-2.5 py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-emerald-300 border border-emerald-700/40 transition flex items-center space-x-1" onclick="openEcosystemModal('ecobee')">
+                        <span>🌡️</span>
+                        <span>Ecobee</span>
+                    </button>
+                    <button class="text-xs px-2.5 py-1 rounded-full bg-purple-950/70 hover:bg-purple-900/80 text-purple-300 border border-purple-700/50 transition flex items-center space-x-1" onclick="openGameArcadeModal()">
+                        <span>🎮</span>
+                        <span>Arcade Games</span>
+                    </button>
                     <button id="reminderCenterBtn" type="button" class="text-xs px-2.5 py-1 rounded-full bg-amber-950/60 hover:bg-amber-900/70 text-amber-300 border border-amber-700/40 transition flex items-center space-x-1" onclick="openReminderCenter()">
                         <i data-lucide="bell-ring" class="w-3.5 h-3.5"></i>
                         <span>Reminders</span>
@@ -200,7 +262,29 @@
                 </div>
             </div>
 
-            <!-- 2. Conversational Message Feed -->
+            <!-- 2. Conversation Session Control Bar -->
+            <div class="flex items-center justify-between px-3.5 py-2 bg-slate-900/90 border border-slate-800 rounded-2xl text-xs backdrop-blur-sm shadow-md">
+                <div class="flex items-center space-x-2 truncate pr-2">
+                    <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shrink-0"></span>
+                    <span class="text-slate-500 text-[11px] shrink-0 font-mono">Chat:</span>
+                    <span id="activeConversationTitle" class="font-semibold text-slate-200 truncate text-xs">Main Session</span>
+                    <button onclick="renameCurrentConversation()" class="text-slate-500 hover:text-cyan-400 transition p-1 shrink-0" title="Rename conversation">
+                        <i data-lucide="edit-2" class="w-3 h-3"></i>
+                    </button>
+                </div>
+                <div class="flex items-center space-x-1.5 shrink-0">
+                    <button onclick="createNewConversation()" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center space-x-1 text-[11px]" title="Start fresh conversation">
+                        <i data-lucide="plus" class="w-3 h-3 text-cyan-400"></i>
+                        <span>New</span>
+                    </button>
+                    <button onclick="deleteActiveConversation()" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-red-950/70 text-slate-400 hover:text-red-400 border border-transparent hover:border-red-800/60 transition flex items-center space-x-1 text-[11px]" title="Delete this conversation thread">
+                        <i data-lucide="trash-2" class="w-3 h-3"></i>
+                        <span>Delete</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Conversational Message Feed -->
             <div id="chatFeed" class="flex-1 overflow-y-auto space-y-3.5 min-h-[300px] max-h-[500px] pr-2 scrollbar-thin">
                 <!-- Welcome Assistant Message -->
                 <div class="flex items-start space-x-3 bg-slate-900/80 border border-slate-800 p-4 rounded-2xl">
@@ -304,6 +388,29 @@
                         <div id="weatherHumidityBar" class="bg-gradient-to-r from-sky-500 to-indigo-500 h-1.5 rounded-full transition-all duration-500" style="width: 0%"></div>
                     </div>
                 </div>
+
+                <!-- Global Weather Search & Location Quick Pick -->
+                <form id="weatherSearchForm" onsubmit="handleWeatherSearch(event)" class="pt-2 border-t border-slate-800/60 space-y-1.5">
+                    <div class="flex items-center gap-1.5">
+                        <div class="relative flex-1">
+                            <i data-lucide="search" class="w-3 h-3 text-slate-400 absolute left-2.5 top-2.5 pointer-events-none"></i>
+                            <input id="weatherPlaceInput" type="text" placeholder="Search any city or country..." class="w-full pl-7 pr-2 py-1.5 text-xs bg-slate-950/80 border border-slate-800 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 transition" />
+                        </div>
+                        <button type="submit" class="px-2.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold shrink-0 transition" title="Get Live Weather">
+                            Search
+                        </button>
+                    </div>
+                    <!-- Quick City / Country Chips -->
+                    <div class="flex flex-wrap gap-1 pt-0.5">
+                        <button type="button" onclick="loadWeather(null)" class="px-1.5 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-[10px] text-sky-300">📍 Local</button>
+                        <button type="button" onclick="loadWeather('Tokyo')" class="px-1.5 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-[10px] text-slate-300">🗼 Tokyo</button>
+                        <button type="button" onclick="loadWeather('Paris')" class="px-1.5 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-[10px] text-slate-300">🇫🇷 Paris</button>
+                        <button type="button" onclick="loadWeather('London')" class="px-1.5 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-[10px] text-slate-300">🇬🇧 London</button>
+                        <button type="button" onclick="loadWeather('New York')" class="px-1.5 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-[10px] text-slate-300">🗽 NY</button>
+                        <button type="button" onclick="loadWeather('Dubai')" class="px-1.5 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-[10px] text-slate-300">🇦🇪 Dubai</button>
+                        <button type="button" onclick="loadWeather('Canada')" class="px-1.5 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-[10px] text-slate-300">🇨🇦 Canada</button>
+                    </div>
+                </form>
             </div>
 
             <!-- 0B. Music & Entertainment Mini Player -->
@@ -341,6 +448,21 @@
                         <i data-lucide="volume-2" class="w-3 h-3 text-pink-400"></i>
                         <input type="range" id="playerVolume" min="0" max="1" step="0.05" value="0.75" class="w-16 accent-pink-500 h-1 bg-slate-800 rounded">
                     </div>
+                </div>
+                <!-- Live Music App Connections -->
+                <div class="flex items-center justify-between gap-1 pt-1 border-t border-slate-800/60">
+                    <button id="playerFullSongBtn" type="button" onclick="openCurrentFullSong()" class="py-1 px-2 rounded-lg bg-pink-600 hover:bg-pink-500 text-white font-semibold text-[10px] flex items-center space-x-1 transition shadow-md shadow-pink-600/30" title="Stream 100% Full Song with Embedded Player">
+                        <span>▶️ Full Song</span>
+                    </button>
+                    <a id="playerSpotifyLink" href="https://open.spotify.com/search/Midnight%20Chill%20Lofi" target="_blank" class="flex-1 py-1 px-1.5 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-600/40 text-[10px] text-emerald-300 font-semibold flex items-center justify-center space-x-1 transition" title="Open and Stream on Spotify">
+                        <span>🟢 Spotify</span>
+                    </a>
+                    <a id="playerYoutubeLink" href="https://music.youtube.com/search?q=Midnight+Chill+Lofi" target="_blank" class="flex-1 py-1 px-1.5 rounded-lg bg-red-950/80 hover:bg-red-900 border border-red-600/40 text-[10px] text-red-300 font-semibold flex items-center justify-center space-x-1 transition" title="Open on YouTube Music">
+                        <span>▶️ YouTube</span>
+                    </a>
+                    <button type="button" onclick="handleTabSwitch('music')" class="py-1 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-[10px] text-pink-300 transition" title="Search Any Song">
+                        <i data-lucide="search" class="w-3 h-3"></i>
+                    </button>
                 </div>
                 <audio id="novaAudioPlayer" src="https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3" preload="none"></audio>
             </div>
@@ -415,6 +537,26 @@
                 </div>
             </div>
 
+            <!-- 4B. Alexa Ecosystem: Fire TV, Ring & Ecobee Hub -->
+            <div id="alexaEcosystemCard" class="glass-panel p-3.5 space-y-2.5 bg-gradient-to-br from-slate-900/90 to-orange-950/20 border-orange-500/30">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-1.5">
+                        <i data-lucide="layers" class="w-4 h-4 text-orange-400"></i>
+                        <h3 class="text-xs font-bold text-orange-300 uppercase tracking-wide">Alexa Ecosystem</h3>
+                    </div>
+                    <div class="flex space-x-1">
+                        <button type="button" onclick="switchEcosystemMiniTab('fire_tv')" id="ecoTabBtnFiretv" class="text-[9px] px-2 py-0.5 rounded-full bg-orange-600 text-white font-medium">TV</button>
+                        <button type="button" onclick="switchEcosystemMiniTab('ring')" id="ecoTabBtnRing" class="text-[9px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 hover:text-white font-medium">Ring</button>
+                        <button type="button" onclick="switchEcosystemMiniTab('ecobee')" id="ecoTabBtnEcobee" class="text-[9px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 hover:text-white font-medium">Bee</button>
+                    </div>
+                </div>
+
+                <!-- Ecosystem Mini View Container -->
+                <div id="ecosystemMiniContainer" class="space-y-2 text-xs">
+                    <!-- Populated dynamically via JS -->
+                </div>
+            </div>
+
             <!-- 5. Phone Limits & Digital Wellbeing -->
             <div class="glass-panel p-3.5 space-y-2.5">
                 <div class="flex items-center justify-between">
@@ -444,28 +586,78 @@
     <!-- MODALS & POPUPS                                                           -->
     <!-- ========================================================================= -->
 
-    <!-- Emergency SOS Modal -->
-    <div id="sosModal" class="fixed inset-0 bg-red-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-slate-900 border-2 border-red-500 rounded-3xl max-w-md w-full p-6 text-center space-y-4 shadow-2xl shadow-red-500/30">
-            <div class="w-16 h-16 rounded-full bg-red-600/30 text-red-500 border border-red-500 mx-auto flex items-center justify-center animate-bounce">
-                <i data-lucide="alert-triangle" class="w-8 h-8"></i>
-            </div>
-            <h2 class="text-xl font-bold text-white">EMERGENCY SOS DISPATCHED</h2>
-            <p id="sosModalDesc" class="text-xs text-slate-300">
-                Your live GPS coordinates and distress report have been dispatched to Emergency Services and designated personal contacts.
-            </p>
-            <div id="sosCoordsBox" class="p-3 rounded-xl bg-slate-950 border border-red-500/50 font-mono text-xs text-red-400">
-                Coordinates: Broadcasting...
-            </div>
-            <div class="flex space-x-3 pt-2">
-                <button id="cancelSosBtn" class="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold">
-                    I am Safe (Cancel Alert)
+    <!-- Upgraded Emergency SOS Modal (Real Siren, GPS, WhatsApp, Contacts & Medical ICE) -->
+    <div id="sosModal" class="fixed inset-0 bg-red-950/85 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border-2 border-red-500 rounded-3xl max-w-lg w-full p-6 text-center space-y-4 shadow-2xl shadow-red-500/40 emergency-strobe-active">
+            <div class="flex items-center justify-between pb-2 border-b border-red-900/60">
+                <div class="flex items-center space-x-2">
+                    <span class="w-3 h-3 rounded-full bg-red-500 animate-ping"></span>
+                    <span class="text-xs font-bold text-red-400 uppercase tracking-wider">LIVE EMERGENCY DISTRESS BEACON</span>
+                </div>
+                <button id="muteSirenBtn" type="button" class="text-[11px] px-2.5 py-1 rounded-lg bg-red-950/80 border border-red-700/60 text-red-200 hover:bg-red-900">
+                    🔊 Mute Siren
                 </button>
-                <a id="callEmergencyBtn" href="tel:112" class="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-semibold flex items-center justify-center space-x-1">
+            </div>
+
+            <div class="w-14 h-14 rounded-full bg-red-600/20 text-red-500 border-2 border-red-500 mx-auto flex items-center justify-center animate-bounce">
+                <i data-lucide="shield-alert" class="w-7 h-7"></i>
+            </div>
+
+            <h2 class="text-xl font-black text-white tracking-tight">HIGH-PRIORITY SOS DISPATCHED</h2>
+            <p id="sosModalDesc" class="text-xs text-slate-300">
+                Live GPS coordinates, distress broadcast, and Medical ICE card are transmitted to emergency contacts.
+            </p>
+
+            <!-- Live GPS Coordinates & Map Link -->
+            <div class="p-3 rounded-xl bg-slate-950 border border-red-500/50 text-left space-y-1.5">
+                <div class="flex items-center justify-between">
+                    <span class="text-[10px] uppercase font-bold text-slate-400">Exact GPS Coordinates</span>
+                    <a id="sosGoogleMapsLink" href="https://maps.google.com" target="_blank" rel="noopener noreferrer" class="text-[10px] text-cyan-400 hover:underline flex items-center space-x-1">
+                        <span>Open in Google Maps</span>
+                        <i data-lucide="external-link" class="w-3 h-3"></i>
+                    </a>
+                </div>
+                <div id="sosCoordsBox" class="font-mono text-xs text-red-400 font-bold">
+                    Coordinates: Broadcasting live lock...
+                </div>
+                <div id="sosAddressBox" class="text-[11px] text-slate-400 truncate">
+                    Detecting street address...
+                </div>
+            </div>
+
+            <!-- Instant Dispatch Actions: Phone Calls, WhatsApp & SMS -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                <a id="callEmergencyBtn" href="tel:112" class="p-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold flex flex-col items-center justify-center space-y-1 shadow-lg shadow-red-600/30">
                     <i data-lucide="phone-call" class="w-4 h-4"></i>
-                    <span>Call 112 / 911</span>
+                    <span>Call 112</span>
+                </a>
+                <a id="callAmbulanceBtn" href="tel:108" class="p-2.5 rounded-xl bg-rose-700 hover:bg-rose-600 text-white text-xs font-bold flex flex-col items-center justify-center space-y-1 shadow-lg shadow-rose-700/30">
+                    <i data-lucide="cross" class="w-4 h-4"></i>
+                    <span>Ambulance 108</span>
+                </a>
+                <a id="sosWhatsAppBtn" href="#" target="_blank" rel="noopener noreferrer" class="p-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex flex-col items-center justify-center space-y-1 shadow-lg shadow-emerald-600/30">
+                    <i data-lucide="message-circle" class="w-4 h-4"></i>
+                    <span>WhatsApp SOS</span>
+                </a>
+                <a id="sosSmsBtn" href="#" class="p-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex flex-col items-center justify-center space-y-1 shadow-lg shadow-blue-600/30">
+                    <i data-lucide="mail" class="w-4 h-4"></i>
+                    <span>SMS Distress</span>
                 </a>
             </div>
+
+            <!-- Medical ICE Summary -->
+            <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-left space-y-1 text-xs">
+                <div class="flex justify-between items-center text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+                    <span>Medical Emergency Card (ICE)</span>
+                    <span id="sosBloodType" class="text-rose-400 font-mono font-bold">Blood: O+</span>
+                </div>
+                <p id="sosAllergies" class="text-slate-300 text-[11px]">Allergies: Penicillin (Simulated) • Inhaler on standby</p>
+            </div>
+
+            <!-- Cancel Button -->
+            <button id="cancelSosBtn" type="button" class="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold">
+                I am Safe (Cancel Emergency Alert &amp; Stop Siren)
+            </button>
         </div>
     </div>
 
@@ -512,6 +704,8 @@
     <!-- Floating Toast Notification System -->
     <div id="toastContainer"></div>
 
-    <script src="app.js?v=2.0.8"></script>
+    <script src="games.js?v=2.7.0"></script>
+    <script src="avatar-3d.js?v=2.7.0"></script>
+    <script src="app.js?v=2.7.0"></script>
 </body>
 </html>

@@ -117,6 +117,23 @@ class MemoryUpdateRequest(BaseModel):
     category: Optional[str] = None
     is_pinned: Optional[bool] = None
 
+class EcosystemActionRequest(BaseModel):
+    action: str
+    param: Optional[Any] = None
+
+class EmergencyContactCreateRequest(BaseModel):
+    name: str
+    phone: str
+    relationship: Optional[str] = "Family"
+    is_primary: Optional[bool] = False
+
+class MedicalInfoUpdateRequest(BaseModel):
+    full_name: Optional[str] = None
+    blood_type: Optional[str] = None
+    allergies: Optional[str] = None
+    medications: Optional[str] = None
+    emergency_notes: Optional[str] = None
+
 class WhatIfRequest(BaseModel):
     scenario_title: Optional[str] = "Alternative Workload Schedule"
     modifications: List[Dict[str, Any]]
@@ -128,9 +145,19 @@ class SkillCreateRequest(BaseModel):
     steps: List[Dict[str, Any]]
 
 class ReminderCreateRequest(BaseModel):
-    title: str
-    due_time: str
+    title: Optional[str] = None
+    due_time: Optional[str] = None
+    text: Optional[str] = None
+    time_str: Optional[str] = None
     recurring: Optional[str] = "none"
+
+    @property
+    def clean_title(self) -> str:
+        return (self.title or self.text or "Reminder").strip()
+
+    @property
+    def clean_due_time(self) -> str:
+        return (self.due_time or self.time_str or "").strip()
 
 class DeviceToggleRequest(BaseModel):
     device: str
@@ -188,9 +215,44 @@ async def get_conversation_messages(conv_id: str):
 
 @app.delete("/api/conversations/{conv_id}")
 async def delete_conversation(conv_id: str):
-    """Deletes a conversation session."""
+    """Deletes a single conversation session."""
     ok = conversation_mgr.delete_conversation(conv_id)
     return {"ok": ok, "id": conv_id}
+
+@app.delete("/api/conversations")
+async def clear_all_conversations():
+    """Clears all conversation sessions and messages."""
+    return conversation_mgr.clear_all_conversations()
+
+class RenameConversationRequest(BaseModel):
+    title: str
+
+@app.patch("/api/conversations/{conv_id}")
+async def rename_conversation_endpoint(conv_id: str, req: RenameConversationRequest):
+    """Renames a conversation thread."""
+    ok = conversation_mgr.rename_conversation(conv_id, req.title)
+    return {"ok": ok, "id": conv_id, "title": req.title}
+
+@app.delete("/api/messages/{message_id}")
+async def delete_message_endpoint(message_id: int):
+    """Deletes an individual message from chat history."""
+    ok = conversation_mgr.delete_message(message_id)
+    return {"ok": ok, "id": message_id}
+
+
+# =========================================================================
+# 1B. NOVA GAMING ARCADE ENDPOINTS
+# =========================================================================
+
+@app.get("/api/games")
+async def list_arcade_games():
+    """Lists all available instant playable arcade games."""
+    return {"games": brain.games.get_catalog()}
+
+@app.get("/api/games/trivia")
+async def get_arcade_trivia():
+    """Retrieves a randomized trivia challenge question."""
+    return brain.games.get_random_trivia()
 
 
 # =========================================================================
@@ -427,7 +489,11 @@ async def scan_conversation_reminders():
 @app.post("/api/reminders")
 async def add_reminder(req: ReminderCreateRequest):
     """Schedules a new reminder."""
-    return reminder_service.add_reminder(req.title, req.due_time, req.recurring)
+    title = req.clean_title
+    due_time = req.clean_due_time
+    if not due_time:
+        raise HTTPException(status_code=400, detail="Due time is required for a reminder.")
+    return reminder_service.add_reminder(title, due_time, req.recurring or "none")
 
 @app.post("/api/reminders/{reminder_id}/complete")
 async def complete_reminder(reminder_id: int):
@@ -511,6 +577,53 @@ async def sos_endpoint(req: SOSRequest):
 async def get_sos_history():
     return {"history": brain.guardian.sos_history}
 
+# =========================================================================
+# 7B. ALEXA ECOSYSTEM & ENHANCED EMERGENCY GUARDIAN ROUTES
+# =========================================================================
+
+@app.get("/api/alexa/devices")
+async def get_alexa_devices():
+    """Returns active states of Fire TV, Ring Video Doorbell, and Ecobee thermostat."""
+    return brain.alexa_devices.get_all_ecosystem_devices()
+
+@app.post("/api/alexa/firetv/action")
+async def handle_firetv_action(req: EcosystemActionRequest):
+    """Executes remote navigation, playback, volume, or app launching on Fire TV."""
+    return brain.alexa_devices.fire_tv_action(req.action, req.param)
+
+@app.post("/api/alexa/ring/action")
+async def handle_ring_action(req: EcosystemActionRequest):
+    """Executes Ring doorbell chime, 2-way talk, or security mode changes."""
+    return brain.alexa_devices.ring_action(req.action, req.param)
+
+@app.post("/api/alexa/ecobee/action")
+async def handle_ecobee_action(req: EcosystemActionRequest):
+    """Sets temperature setpoint, HVAC cool/heat mode, or Eco savings mode."""
+    return brain.alexa_devices.ecobee_action(req.action, req.param)
+
+@app.get("/api/sos/contacts")
+async def get_emergency_contacts():
+    """Returns persistent emergency contacts and user medical ICE profile."""
+    return brain.guardian.get_emergency_state()
+
+@app.post("/api/sos/contacts")
+async def add_emergency_contact(req: EmergencyContactCreateRequest):
+    """Registers a new persistent emergency phone contact."""
+    contact = brain.guardian.add_emergency_contact(req.name, req.phone, req.relationship or "Family", req.is_primary or False)
+    return {"ok": True, "contact": contact}
+
+@app.delete("/api/sos/contacts/{contact_id}")
+async def delete_emergency_contact(contact_id: int):
+    """Removes an emergency contact."""
+    ok = brain.guardian.delete_emergency_contact(contact_id)
+    return {"ok": ok, "id": contact_id}
+
+@app.post("/api/sos/medical")
+async def update_medical_id(req: MedicalInfoUpdateRequest):
+    """Updates the user's emergency medical emergency profile."""
+    updated = brain.guardian.update_medical_info(req.model_dump(exclude_unset=True))
+    return {"ok": True, "medical_info": updated}
+
 @app.post("/api/location/update")
 async def update_location(req: LocationUpdateRequest):
     """Updates the assistant's knowledge of the user's current GPS location."""
@@ -579,22 +692,48 @@ class TimerCreateRequest(BaseModel):
     minutes: float
     label: Optional[str] = "Timer"
 
-class ReminderCreateRequest(BaseModel):
-    text: str
+class AlarmReminderCreateRequest(BaseModel):
+    text: Optional[str] = None
     time_str: Optional[str] = "Today"
+    title: Optional[str] = None
+    due_time: Optional[str] = None
 
 @app.get("/api/weather")
-async def get_weather(city: Optional[str] = None, lat: Optional[float] = None, lon: Optional[float] = None):
-    """Returns real-time temperature, humidity, and atmospheric conditions."""
-    return brain.weather.get_weather(lat=lat, lon=lon, city=city)
+async def get_weather(
+    city: Optional[str] = None,
+    place: Optional[str] = None,
+    country: Optional[str] = None,
+    lat: Optional[float] = None,
+    lon: Optional[float] = None
+):
+    """Returns real-time temperature, humidity, and atmospheric conditions for any place, city, or country."""
+    target = place or city or country
+    return brain.weather.get_weather(place=target, lat=lat, lon=lon)
 
 @app.get("/api/music/state")
 async def get_music_state():
     return brain.music.get_player_state()
 
+class MusicPlayRequest(BaseModel):
+    query: Optional[str] = None
+
 @app.post("/api/music/play")
-async def play_music():
+async def play_music(req: Optional[MusicPlayRequest] = None):
+    if req and req.query and req.query.strip():
+        return brain.music.search_and_play(req.query.strip())
     return brain.music.play_favourite_songs()
+
+@app.get("/api/news")
+async def get_news(category: str = "top", topic: Optional[str] = None, limit: int = 6):
+    """Returns live, real news headlines from global platforms (Google News, BBC, etc.)."""
+    articles = brain.news.get_news(category=category, topic=topic, limit=limit)
+    return {
+        "success": True,
+        "category": category,
+        "topic": topic,
+        "count": len(articles),
+        "articles": articles
+    }
 
 @app.post("/api/music/pause")
 async def pause_music():
@@ -622,8 +761,8 @@ async def create_timer(req: TimerCreateRequest):
     return brain.alarms.add_timer(req.minutes, req.label)
 
 @app.post("/api/reminders/new")
-async def create_reminder_item(req: ReminderCreateRequest):
-    return brain.alarms.add_reminder(req.text, req.time_str)
+async def create_reminder_item(req: AlarmReminderCreateRequest):
+    return brain.alarms.add_reminder(text=req.text or req.title, time_str=req.time_str or req.due_time)
 
 @app.delete("/api/alarms/{item_id}")
 async def delete_alarm_item(item_id: int):

@@ -131,13 +131,22 @@ class ConversationManager:
         ]
 
     def append_message(self, conversation_id: str, role: str, content: str, payload: Optional[Dict[str, Any]] = None) -> int:
-        """Appends a user or assistant message to the thread."""
+        """Appends a user or assistant message to the thread, updating title if generic."""
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
             # Ensure conversation exists
-            cursor.execute("SELECT id FROM conversations WHERE id = ?", (conversation_id,))
-            if not cursor.fetchone():
-                cursor.execute("INSERT INTO conversations (id, title) VALUES (?, ?)", (conversation_id, content[:30] or "Conversation"))
+            cursor.execute("SELECT id, title FROM conversations WHERE id = ?", (conversation_id,))
+            existing = cursor.fetchone()
+            if not existing:
+                clean_title = (content[:32].strip().capitalize() if role == "user" else "Conversation") or "Conversation"
+                cursor.execute("INSERT INTO conversations (id, title) VALUES (?, ?)", (conversation_id, clean_title))
+            elif role == "user":
+                curr_title = (existing["title"] or "").strip()
+                if curr_title in ["Conversation", "default-session", "New Conversation", "Main Session"] or curr_title.startswith("Session "):
+                    clean_t = " ".join(content.replace("\n", " ").split()[:5])
+                    if clean_t:
+                        new_t = clean_t[:36].strip().capitalize()
+                        cursor.execute("UPDATE conversations SET title = ? WHERE id = ?", (new_t, conversation_id))
 
             cursor.execute("""
                 INSERT INTO messages (conversation_id, role, content, payload_json)
@@ -158,10 +167,31 @@ class ConversationManager:
             return cursor.rowcount > 0
 
     def delete_conversation(self, conversation_id: str) -> bool:
+        """Deletes a single conversation thread and all its messages."""
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM messages WHERE conversation_id = ?", (conversation_id,))
             cursor.execute("DELETE FROM conversations WHERE id = ?", (conversation_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def clear_all_conversations(self) -> dict:
+        """Clears all conversation threads and messages, resetting to a clean default session."""
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM messages")
+            cursor.execute("DELETE FROM conversations")
+            # Create a clean default session
+            cursor.execute("INSERT INTO conversations (id, title) VALUES ('default-session', 'Main Session')")
+            conn.commit()
+        logger.info("Cleared all conversation sessions and reset to default-session")
+        return {"status": "cleared", "active_session": "default-session"}
+
+    def delete_message(self, message_id: int) -> bool:
+        """Deletes an individual message from history."""
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM messages WHERE id = ?", (message_id,))
             conn.commit()
             return cursor.rowcount > 0
 

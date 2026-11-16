@@ -3,11 +3,22 @@ Runner script for Nova AI Assistant.
 Starts the FastAPI server and opens the browser interface automatically.
 """
 
+import os
 import sys
+from pathlib import Path
 import uvicorn
 import webbrowser
 import threading
 import time
+
+# Ensure project root is in sys.path and cwd is project directory so run.py can be invoked from any folder
+script_dir = str(Path(__file__).resolve().parent)
+if script_dir not in sys.path:
+    sys.path.insert(0, script_dir)
+try:
+    os.chdir(script_dir)
+except Exception:
+    pass
 
 if sys.platform == "win32":
     if hasattr(sys.stdout, "reconfigure"):
@@ -37,4 +48,4 @@ if __name__ == "__main__":
     print("Server running on http://127.0.0.1:8000")
     
     threading.Thread(target=open_browser, daemon=True).start()
-    uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=False)
+    uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=False, app_dir=script_dir)

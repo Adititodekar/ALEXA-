@@ -35,6 +35,10 @@
     animation: pulseRing 1.8s cubic-bezier(0.215, 0.61, 0.355, 1) infinite 0.45s;
 }
 
+#voiceOrb.hidden {
+    display: none !important;
+}
+
 /* Base Orb Container */
 #voiceOrb {
     position: relative;
@@ -444,4 +448,179 @@
 }
 #genericModal:not(.hidden), #deadlineModal:not(.hidden), #sosModal:not(.hidden) {
     display: flex !important;
+}
+
+
+@keyframes floatBob {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-8px); }
+}
+.animate-bounce-subtle {
+    animation: floatBob 3.2s ease-in-out infinite;
+}
+
+/* =========================================================================
+   3D ROBOT AVATAR, ALEXA ECOSYSTEM (FIRE TV, RING, ECOBEE) & SOS ENHANCEMENTS
+   ========================================================================= */
+
+#avatar3DContainer {
+    position: relative;
+    width: 100%;
+    max-width: 340px;
+    height: 250px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    touch-action: none;
+}
+
+#avatar3DContainer canvas {
+    border-radius: 20px;
+    filter: drop-shadow(0 12px 30px rgba(6, 182, 212, 0.25));
+    transition: filter 0.3s ease;
+}
+
+#avatar3DContainer:hover canvas {
+    filter: drop-shadow(0 14px 40px rgba(6, 182, 212, 0.45));
+}
+
+/* Fire TV Remote Controls */
+.firetv-remote-dpad {
+    width: 120px;
+    height: 120px;
+    border-radius: 9999px;
+    background: #0f172a;
+    border: 2px solid #334155;
+    position: relative;
+    margin: 0 auto;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4), inset 0 2px 4px rgba(255, 255, 255, 0.05);
+}
+
+.firetv-dpad-btn {
+    position: absolute;
+    color: #94a3b8;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    transition: all 0.15s ease;
+}
+
+.firetv-dpad-btn:hover {
+    color: #38bdf8;
+    transform: scale(1.15);
+}
+
+.firetv-dpad-btn:active {
+    transform: scale(0.95);
+}
+
+.firetv-dpad-up { top: 6px; left: 50%; transform: translateX(-50%); width: 36px; height: 28px; }
+.firetv-dpad-down { bottom: 6px; left: 50%; transform: translateX(-50%); width: 36px; height: 28px; }
+.firetv-dpad-left { left: 6px; top: 50%; transform: translateY(-50%); width: 28px; height: 36px; }
+.firetv-dpad-right { right: 6px; top: 50%; transform: translateY(-50%); width: 28px; height: 36px; }
+
+.firetv-dpad-ok {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 44px;
+    height: 44px;
+    border-radius: 9999px;
+    background: linear-gradient(135deg, #1e293b, #0f172a);
+    border: 1px solid #475569;
+    color: #f8fafc;
+    font-weight: 700;
+    font-size: 11px;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.firetv-dpad-ok:hover {
+    background: #0284c7;
+    color: white;
+    border-color: #38bdf8;
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.5);
+}
+
+.firetv-dpad-ok:active {
+    transform: translate(-50%, -50%) scale(0.92);
+}
+
+/* Ring Live Camera Feed Simulation */
+.ring-cam-stream {
+    position: relative;
+    width: 100%;
+    height: 150px;
+    border-radius: 14px;
+    overflow: hidden;
+    background: radial-gradient(circle at center, #1e293b 0%, #090d16 100%);
+    border: 1px solid #334155;
+}
+
+.ring-cam-overlay {
+    position: absolute;
+    inset: 0;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    pointer-events: none;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 40%, transparent 60%, rgba(0,0,0,0.7) 100%);
+}
+
+.ring-rec-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #ef4444;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.ring-rec-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 9999px;
+    background: #ef4444;
+    animation: blinkRec 1s ease-in-out infinite;
+}
+
+@keyframes blinkRec {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.3; transform: scale(0.8); }
+}
+
+/* Ecobee Thermostat Dial */
+.ecobee-dial-wrap {
+    position: relative;
+    width: 130px;
+    height: 130px;
+    margin: 0 auto;
+    border-radius: 9999px;
+    background: radial-gradient(circle, #0f172a 40%, #0369a1 95%, #0284c7 100%);
+    border: 3px solid #38bdf8;
+    box-shadow: 0 0 25px rgba(56, 189, 248, 0.35), inset 0 0 15px rgba(0, 0, 0, 0.8);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Emergency Strobe Border */
+@keyframes emergencyBorderStrobe {
+    0%, 100% { border-color: #ef4444; box-shadow: 0 0 40px rgba(239, 68, 68, 0.6); }
+    50% { border-color: #b91c1c; box-shadow: 0 0 15px rgba(239, 68, 68, 0.2); }
+}
+
+.emergency-strobe-active {
+    animation: emergencyBorderStrobe 0.8s ease-in-out infinite;
 }

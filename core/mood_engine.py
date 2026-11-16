@@ -13,7 +13,7 @@ class MoodEngine:
             "emergency": [
                 "help me", "emergency", "call police", "call ambulance", "accident", 
                 "someone is following me", "i fell", "i can't breathe", "attack", 
-                "heart attack", "danger", "robbery", "fire", "dying", "bleeding"
+                "heart attack", "danger", "robbery", "house fire", "is on fire", "caught fire", "building on fire", "dying", "bleeding"
             ],
             "stressed": [
                 "stressed", "stress", "overwhelmed", "too much work", "pressure", 

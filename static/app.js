@@ -91,11 +91,17 @@ function initApp() {
     try { initMap(); } catch (e) { console.warn("initMap error:", e); }
     try { initGeolocation(); } catch (e) { console.warn("initGeolocation error:", e); }
     try { initSpeechRecognition(); } catch (e) { console.warn("initSpeechRecognition error:", e); }
-    try { loadConversations(); } catch (e) { console.warn("loadConversations error:", e); }
+    try {
+        loadConversations(true).then(() => {
+            switchConversation(currentConversationId);
+        });
+    } catch (e) { console.warn("loadConversations error:", e); }
     try { loadDeadlines(); } catch (e) { console.warn("loadDeadlines error:", e); }
     try { checkDueReminders(); } catch (e) { console.warn("checkDueReminders error:", e); }
     window.setInterval(checkDueReminders, 60 * 1000);
     try { loadSmartHome(); } catch (e) { console.warn("loadSmartHome error:", e); }
+    try { loadAlexaEcosystem(); } catch (e) { console.warn("loadAlexaEcosystem error:", e); }
+    try { initAvatarControls(); } catch (e) { console.warn("initAvatarControls error:", e); }
     try { loadWellbeing(); } catch (e) { console.warn("loadWellbeing error:", e); }
     try { loadProactiveInsights(); } catch (e) { console.warn("loadProactiveInsights error:", e); }
 }
@@ -109,6 +115,68 @@ if (document.readyState === "loading") {
 // =========================================================================
 // 1. TOAST NOTIFICATION SYSTEM
 // =========================================================================
+
+let is3DAvatarActive = true;
+
+function initAvatarControls() {
+    const toggleBtn = document.getElementById("toggleAvatarBtn");
+    const waveBtn = document.getElementById("waveAvatarBtn");
+    const label = document.getElementById("avatarModeLabel");
+    const container3D = document.getElementById("avatar3DContainer");
+    const voiceOrb = document.getElementById("voiceOrb");
+
+    if (toggleBtn) {
+        toggleBtn.addEventListener("click", () => {
+            is3DAvatarActive = !is3DAvatarActive;
+            const actionPrompt = document.getElementById("assistantActionPrompt");
+            if (is3DAvatarActive) {
+                if (container3D) container3D.classList.remove("hidden");
+                if (voiceOrb) {
+                    voiceOrb.classList.add("hidden");
+                    voiceOrb.style.display = "none";
+                }
+                if (label) label.textContent = "3D Bot";
+                if (actionPrompt) actionPrompt.textContent = "Click Nova or speak 'Hey Nova'";
+                showToast("3D Animated Robot Avatar active.", "info");
+            } else {
+                if (container3D) container3D.classList.add("hidden");
+                if (voiceOrb) {
+                    voiceOrb.classList.remove("hidden");
+                    voiceOrb.style.display = "block";
+                }
+                if (label) label.textContent = "Orb Eye";
+                if (actionPrompt) actionPrompt.textContent = "Click Eye or speak 'Hey Nova'";
+                showToast("Classic Alexa Eye active.", "info");
+            }
+        });
+    }
+
+    if (waveBtn) {
+        waveBtn.addEventListener("click", () => {
+            if (window.triggerAvatarWave) window.triggerAvatarWave(3);
+            showToast("Nova waves hello!", "info");
+        });
+    }
+
+    window.triggerAvatarInteraction = function() {
+        if (recognition && isListening) {
+            stopSpeechRecognition();
+        } else {
+            startSpeechRecognition();
+        }
+    };
+
+    const actionPrompt = document.getElementById("assistantActionPrompt");
+    if (is3DAvatarActive) {
+        if (container3D) container3D.classList.remove("hidden");
+        if (voiceOrb) {
+            voiceOrb.classList.add("hidden");
+            voiceOrb.style.display = "none";
+        }
+        if (actionPrompt) actionPrompt.textContent = "Click Nova or speak 'Hey Nova'";
+    }
+}
+
 function showToast(message, type = "info") {
     if (!toastContainer) return;
     const toast = document.createElement("div");
@@ -131,6 +199,57 @@ function showToast(message, type = "info") {
     }, 3500);
 }
 
+
+// Harmonic Crystal Two-Tone Bell Chime for Reminders (Web Audio API)
+function playReminderChime() {
+    try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+        
+        [880, 1320].forEach((freq, idx) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(freq, now + idx * 0.16);
+            gain.gain.setValueAtTime(0, now + idx * 0.16);
+            gain.gain.linearRampToValueAtTime(0.25, now + idx * 0.16 + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.16 + 0.7);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now + idx * 0.16);
+            osc.stop(now + idx * 0.16 + 0.75);
+        });
+    } catch (e) {
+        console.warn("Chime playback error:", e);
+    }
+}
+
+function testAudioReminderPreview() {
+    playReminderChime();
+    showToast("Playing reminder audio bell chime...", "info");
+    setTimeout(() => {
+        speakText("This is an audio preview of your upcoming task reminder on Nova AI.");
+    }, 600);
+}
+window.testAudioReminderPreview = testAudioReminderPreview;
+
+window.setQuickReminderPreset = function(minutes) {
+    const dueInput = document.getElementById("reminderDueInput");
+    if (!dueInput) return;
+    const target = new Date();
+    if (minutes === 'tomorrow9') {
+        target.setDate(target.getDate() + 1);
+        target.setHours(9, 0, 0, 0);
+    } else {
+        target.setMinutes(target.getMinutes() + Number(minutes));
+    }
+    target.setMinutes(target.getMinutes() - target.getTimezoneOffset());
+    dueInput.value = target.toISOString().slice(0, 16);
+    showToast("Time preset selected.", "info");
+};
+
 async function checkDueReminders() {
     try {
         const response = await fetch("/api/reminders");
@@ -141,13 +260,14 @@ async function checkDueReminders() {
         if (badge) badge.textContent = String(pending.length);
         for (const reminder of (data.reminders || [])) {
             if (!reminder.is_due_now || reminder.status !== "pending") continue;
+            playReminderChime();
             const message = `Reminder: ${reminder.title}. It is time to complete your task.`;
             showToast(message, "info");
-            if (localStorage.getItem("novaSpokenReminders") === "enabled") {
+            setTimeout(() => {
                 speakText(message);
-            }
+            }, 500);
             if ("Notification" in window && Notification.permission === "granted") {
-                new Notification("Nova reminder", { body: message });
+                new Notification("Nova Reminder: " + reminder.title, { body: message });
             }
             await fetch(`/api/reminders/${reminder.id}/complete`, { method: "POST" });
         }
@@ -191,6 +311,14 @@ async function openReminderCenter() {
                     <div class="flex flex-wrap items-center gap-2">
                         <input id="reminderDueInput" required type="datetime-local" class="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white focus:border-amber-500 focus:outline-none">
                         <button type="submit" class="rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-500">Add reminder</button>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1.5 pt-1">
+                        <span class="text-[10px] text-amber-300 font-semibold uppercase tracking-wider">Quick Presets:</span>
+                        <button type="button" onclick="setQuickReminderPreset(15)" class="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 hover:border-amber-500 text-[10px] text-amber-200">+15m</button>
+                        <button type="button" onclick="setQuickReminderPreset(60)" class="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 hover:border-amber-500 text-[10px] text-amber-200">+1h</button>
+                        <button type="button" onclick="setQuickReminderPreset(180)" class="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 hover:border-amber-500 text-[10px] text-amber-200">+3h</button>
+                        <button type="button" onclick="setQuickReminderPreset('tomorrow9')" class="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 hover:border-amber-500 text-[10px] text-amber-200">Tomorrow 9 AM</button>
+                        <button type="button" onclick="testAudioReminderPreview()" class="ml-auto px-2 py-0.5 rounded bg-amber-950/80 border border-amber-600/50 hover:bg-amber-900 text-[10px] text-amber-300 font-medium">🔔 Test Audio Chime</button>
                     </div>
                 </form>
                 <div class="space-y-2">
@@ -278,43 +406,67 @@ async function deleteSavedReminder(reminderId) {
 // =========================================================================
 // 1B. LIVE WEATHER & ENVIRONMENTAL CONDITIONS (OpenWeatherMap API)
 // =========================================================================
-async function loadWeather(city = null) {
+function updateWeatherUI(data) {
+    if (!data) return;
+    const tempEl = document.getElementById("weatherTemp");
+    const feelsEl = document.getElementById("weatherFeelsLike");
+    const condEl = document.getElementById("weatherCondition");
+    const cityEl = document.getElementById("weatherCity");
+    const humEl = document.getElementById("weatherHumidity");
+    const humLabel = document.getElementById("weatherHumidityLabel");
+    const humBar = document.getElementById("weatherHumidityBar");
+    const windEl = document.getElementById("weatherWind");
+
+    if (tempEl) tempEl.textContent = `${data.temperature}°C`;
+    if (feelsEl) feelsEl.textContent = `Feels ${data.feels_like}°C`;
+    const descText = data.description || data.condition || "Clear";
+    if (condEl) condEl.textContent = descText.charAt(0).toUpperCase() + descText.slice(1);
+
+    let locDisplay = data.city || "Local Area";
+    if (data.country && !locDisplay.toLowerCase().includes(data.country.toLowerCase())) {
+        locDisplay = `${locDisplay}, ${data.country}`;
+    }
+    if (cityEl) cityEl.textContent = locDisplay;
+    if (humEl) humEl.textContent = `Humidity ${data.humidity}%`;
+    if (humLabel) humLabel.textContent = `${data.humidity}%`;
+    if (humBar) humBar.style.width = `${Math.min(100, Math.max(0, data.humidity))}%`;
+    if (windEl) windEl.textContent = `Wind: ${data.wind_speed} m/s`;
+
+    if (map && data.latitude && data.longitude) {
+        try {
+            map.setView([data.latitude, data.longitude], 9);
+            if (userMarker) {
+                userMarker.setLatLng([data.latitude, data.longitude]);
+                userMarker.bindPopup(`<b>${escapeHtml(locDisplay)}</b><br>${data.temperature}°C, ${escapeHtml(descText)}`).openPopup();
+            }
+        } catch (e) {
+            console.debug("Map pan error:", e);
+        }
+    }
+}
+
+async function loadWeather(place = null) {
     try {
-        const url = city ? `/api/weather?city=${encodeURIComponent(city)}` : `/api/weather`;
+        const url = place ? `/api/weather?place=${encodeURIComponent(place)}` : `/api/weather`;
         const res = await fetch(url);
         if (!res.ok) return;
         const data = await res.json();
-
-        const tempEl = document.getElementById("weatherTemp");
-        const feelsEl = document.getElementById("weatherFeelsLike");
-        const condEl = document.getElementById("weatherCondition");
-        const cityEl = document.getElementById("weatherCity");
-        const humEl = document.getElementById("weatherHumidity");
-        const humLabel = document.getElementById("weatherHumidityLabel");
-        const humBar = document.getElementById("weatherHumidityBar");
-        const windEl = document.getElementById("weatherWind");
-
-        if (tempEl) tempEl.textContent = `${data.temperature}°C`;
-        if (feelsEl) feelsEl.textContent = `Feels ${data.feels_like}°C`;
-        if (condEl) condEl.textContent = (data.description || "").charAt(0).toUpperCase() + (data.description || "").slice(1);
-        if (cityEl) cityEl.textContent = `${data.city}, ${data.country || 'IN'}`;
-        if (humEl) humEl.textContent = `Humidity ${data.humidity}%`;
-        if (humLabel) humLabel.textContent = `${data.humidity}%`;
-        if (humBar) humBar.style.width = `${Math.min(100, Math.max(0, data.humidity))}%`;
-        if (windEl) windEl.textContent = `Wind: ${data.wind_speed} m/s`;
+        updateWeatherUI(data);
     } catch (err) {
         console.warn("Weather fetch error:", err);
     }
 }
+window.loadWeather = loadWeather;
 
-async function searchCityWeather() {
-    const input = document.getElementById("weatherCityInput");
+window.handleWeatherSearch = async function(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    const input = document.getElementById("weatherPlaceInput");
     if (!input || !input.value.trim()) return;
-    const city = input.value.trim();
-    await loadWeather(city);
-    handleTabSwitch("weather");
-    showToast(`Loaded weather for ${city}`, "success");
-}
+    const query = input.value.trim();
+    showToast(`Fetching live weather for ${query}...`, "info");
+    await loadWeather(query);
+    showToast(`Live weather loaded for ${query}`, "success");
+};
 
 // =========================================================================
 // 1C. MUSIC PLAYER & ENTERTAINMENT STREAMING SERVICE
@@ -399,7 +551,7 @@ async function nextTrack() {
             updateTrackUI(track);
             const audio = document.getElementById("novaAudioPlayer");
             if (audio) {
-                audio.src = data.track.audio_url;
+                audio.src = track.audio_url;
                 audio.play().catch(() => {});
                 updatePlayPauseButton(true);
             }
@@ -418,7 +570,7 @@ async function prevTrack() {
             updateTrackUI(track);
             const audio = document.getElementById("novaAudioPlayer");
             if (audio) {
-                audio.src = data.track.audio_url;
+                audio.src = track.audio_url;
                 audio.play().catch(() => {});
                 updatePlayPauseButton(true);
             }
@@ -428,8 +580,11 @@ async function prevTrack() {
     }
 }
 
+let currentActiveTrack = null;
+
 function updateTrackUI(track) {
     if (!track) return;
+    currentActiveTrack = track;
     const title = document.getElementById("playerTrackTitle");
     const artist = document.getElementById("playerArtist");
     const album = document.getElementById("playerAlbum");
@@ -437,9 +592,145 @@ function updateTrackUI(track) {
 
     if (title) title.textContent = track.title;
     if (artist) artist.textContent = track.artist;
-    if (album) album.textContent = `${track.album} • ${track.genre || ''}`;
+    if (album) album.textContent = `${track.album || ''} • ${track.genre || ''}`;
     if (art && track.cover_art) art.src = track.cover_art;
+
+    const spotifyLink = document.getElementById("playerSpotifyLink");
+    if (spotifyLink && track.spotify_url) {
+        spotifyLink.href = track.spotify_url;
+    }
+    const ytLink = document.getElementById("playerYoutubeLink");
+    if (ytLink && track.youtube_url) {
+        ytLink.href = track.youtube_url;
+    }
 }
+
+window.openCurrentFullSong = function() {
+    if (currentActiveTrack) {
+        window.openFullSongPlayer(null, currentActiveTrack.title, currentActiveTrack.artist);
+    } else {
+        const titleEl = document.getElementById("playerTrackTitle");
+        const artistEl = document.getElementById("playerArtist");
+        const t = titleEl ? titleEl.textContent : "Believer";
+        const a = artistEl ? artistEl.textContent : "Imagine Dragons";
+        window.openFullSongPlayer(`${t} ${a}`, t, a);
+    }
+};
+
+window.openFullSongPlayer = function(query, title = "", artist = "") {
+    const q = query || `${title} ${artist}`.trim();
+    if (!q) return;
+    const cleanTitle = title || q;
+    const cleanArtist = artist || "Full Length Version";
+    const ytEmbedUrl = `https://www.youtube-nocookie.com/embed?listType=search&list=${encodeURIComponent(q)}&autoplay=1`;
+    const spotifyUrl = `https://open.spotify.com/search/${encodeURIComponent(q)}`;
+    const ytMusicUrl = `https://music.youtube.com/search?q=${encodeURIComponent(q)}`;
+
+    openModal(
+        `🎵 Full Song Player — ${escapeHtml(cleanTitle)}`,
+        "",
+        `
+        <div class="space-y-3.5">
+            <div class="p-3 bg-slate-950 rounded-xl border border-pink-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                <div>
+                    <h4 class="font-bold text-white text-sm">${escapeHtml(cleanTitle)}</h4>
+                    <p class="text-pink-300 text-xs">${escapeHtml(cleanArtist)}</p>
+                    <span class="inline-block mt-1 text-[10px] text-emerald-400 font-mono">100% complete uninterrupted playback</span>
+                </div>
+                <div class="flex items-center space-x-2 shrink-0">
+                    <a href="${spotifyUrl}" target="_blank" class="px-2.5 py-1.5 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700/60 text-emerald-300 text-[10px] font-semibold transition flex items-center space-x-1">
+                        <span>🟢 Spotify App</span>
+                    </a>
+                    <a href="${ytMusicUrl}" target="_blank" class="px-2.5 py-1.5 rounded-lg bg-red-950/80 hover:bg-red-900 border border-red-700/60 text-red-300 text-[10px] font-semibold transition flex items-center space-x-1">
+                        <span>▶️ YouTube Music</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Embedded In-App Player playing 100% Full Track -->
+            <div class="relative w-full aspect-video rounded-2xl overflow-hidden border border-slate-800 shadow-2xl bg-black">
+                <iframe 
+                    class="w-full h-full" 
+                    src="${ytEmbedUrl}" 
+                    title="Full Song Player" 
+                    frameborder="0" 
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                    allowfullscreen>
+                </iframe>
+            </div>
+
+            <div class="p-3 bg-slate-950/60 rounded-xl border border-slate-800 text-[11px] text-slate-400 flex items-start space-x-2">
+                <span class="text-pink-400 text-sm">💡</span>
+                <p>
+                    <strong class="text-slate-200">Why was the direct audio 30 seconds?</strong> Major record labels legally restrict third-party public APIs (Apple iTunes / Deezer) to 30-second previews. This embedded player streams the <strong>complete 3 to 5+ minute full track & video</strong> with zero cutoffs!
+                </p>
+            </div>
+        </div>
+        `
+    );
+};
+
+window.searchAndPlayMusic = async function(query) {
+    if (!query || !query.trim()) return;
+    showToast(`Searching & connecting: ${query}...`, "info");
+    try {
+        const res = await fetch("/api/music/play", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query: query.trim() })
+        });
+        if (!res.ok) throw new Error("Search failed");
+        const data = await res.json();
+        const track = data.track;
+        if (track) {
+            updateTrackUI(track);
+            const audio = document.getElementById("novaAudioPlayer");
+            if (audio && track.audio_url) {
+                audio.src = track.audio_url;
+                audio.play().then(() => {
+                    isMusicPlaying = true;
+                    updatePlayPauseButton(true);
+                }).catch(err => console.debug("Autoplay note:", err));
+            }
+            showToast(`Now Playing: ${track.title} by ${track.artist}`, "success");
+        }
+    } catch (e) {
+        showToast("Could not find music track.", "error");
+    }
+};
+
+window.switchNewsCategory = async function(category, topic = null) {
+    const listEl = document.getElementById("liveNewsListContainer");
+    if (listEl) {
+        listEl.innerHTML = '<div class="py-6 text-center text-xs text-slate-400 animate-pulse">Fetching live headlines from global networks...</div>';
+    }
+    try {
+        let url = `/api/news?category=${encodeURIComponent(category)}`;
+        if (topic) url += `&topic=${encodeURIComponent(topic)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        const articles = data.articles || [];
+        if (listEl) {
+            listEl.innerHTML = articles.map(n => `
+                <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 flex justify-between items-center hover:border-slate-700 transition">
+                    <div class="pr-2">
+                        <h5 class="font-bold text-slate-200 text-xs">${escapeHtml(n.title)}</h5>
+                        <div class="flex items-center space-x-2 mt-1">
+                            <span class="text-[10px] text-emerald-400 font-mono font-semibold">${escapeHtml(n.source)}</span>
+                            <span class="text-[9px] text-slate-500 font-mono">${escapeHtml(n.published || '')}</span>
+                        </div>
+                    </div>
+                    <a href="${n.link}" target="_blank" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-400 text-[10px] font-semibold shrink-0">
+                        Read &rarr;
+                    </a>
+                </div>
+            `).join('') || '<div class="text-center py-4 text-xs text-slate-500">No headlines found for this category.</div>';
+        }
+        showToast(`Loaded ${data.category || category} news!`, "info");
+    } catch (e) {
+        if (listEl) listEl.innerHTML = '<div class="text-center py-4 text-xs text-red-400">Failed to load news headlines.</div>';
+    }
+};
 
 function updatePlayPauseButton(playing) {
     const badge = document.getElementById("playerPlayingBadge");
@@ -476,7 +767,13 @@ function setVisualizerState(state) {
     }
     if (!voiceOrb) return;
 
-    voiceOrb.className = `state-${state} mb-3`;
+    voiceOrb.className = `state-${state} mb-3${is3DAvatarActive ? " hidden" : ""}`;
+    if (is3DAvatarActive) {
+        voiceOrb.style.display = "none";
+    }
+    if (typeof window.setNovaAvatarState === "function") {
+        window.setNovaAvatarState(state);
+    }
 
     switch (state) {
         case "listening":
@@ -547,6 +844,7 @@ function initSpeechRecognition() {
         recognition.lang = 'en-US';
 
         recognition.onstart = () => {
+        if (window.setNovaAvatarState) window.setNovaAvatarState('listening');
             isListening = true;
             setVisualizerState("listening");
         };
@@ -564,6 +862,7 @@ function initSpeechRecognition() {
         };
 
         recognition.onend = () => {
+        if (window.setNovaAvatarState) window.setNovaAvatarState('idle');
             isListening = false;
             if (!isSpeaking) setVisualizerState("idle");
         };
@@ -769,6 +1068,12 @@ async function approveSuggestedTasks(tasks) {
 }
 
 function handleAssistantResponse(data) {
+    if (window.setNovaAvatarState) {
+        window.setNovaAvatarState(data.speech_reply ? "speaking" : "idle");
+    }
+    if (data.type === "alexa_ecosystem" || data.ecosystem) {
+        loadAlexaEcosystem();
+    }
     if (data.mood) updateMoodUI(data.mood);
 
     // Speak aloud if voice speech provided
@@ -780,6 +1085,36 @@ function handleAssistantResponse(data) {
 
     // Render message
     appendAssistantMessage(data.display_reply || data.speech_reply || data.reply, data);
+
+    // Auto-launch Interactive Arcade Game if requested
+    if (data.type === "game" && typeof window.openGameArcadeModal === "function") {
+        setTimeout(() => {
+            window.openGameArcadeModal(data.game_id || "snake");
+            showToast(`Launched ${data.game_title || 'Arcade Game'}!`, "success");
+        }, 700);
+    }
+
+    // Refresh conversation session list in real-time
+    loadConversations();
+
+    // Handle voice/chat conversation deletion intents
+    if (data.type === "conversation_deleted") {
+        setTimeout(async () => {
+            currentConversationId = data.active_session || "default-session";
+            try { localStorage.setItem("novaCurrentConversationId", currentConversationId); } catch (_) {}
+            await switchConversation(currentConversationId);
+            showToast("Conversation cleared", "info");
+        }, 1200);
+    } else if (data.type === "all_conversations_deleted") {
+        setTimeout(async () => {
+            currentConversationId = data.active_session || "default-session";
+            try { localStorage.setItem("novaCurrentConversationId", currentConversationId); } catch (_) {}
+            chatFeed.innerHTML = "";
+            renderWelcomeMessage();
+            await loadConversations();
+            showToast("All conversations reset", "info");
+        }, 1200);
+    }
 
     // Handle Autonomous Mission Formulated
     if (data.type === "mission_plan" && data.mission_plan) {
@@ -808,28 +1143,11 @@ function handleAssistantResponse(data) {
     // Instantly sync Weather if weather response
     if (data.type === "weather" || data.weather) {
         if (data.weather) {
-            const w = data.weather;
-            const tempEl = document.getElementById("weatherTemp");
-            const feelsEl = document.getElementById("weatherFeelsLike");
-            const condEl = document.getElementById("weatherCondition");
-            const cityEl = document.getElementById("weatherCity");
-            const humEl = document.getElementById("weatherHumidity");
-            const humLabel = document.getElementById("weatherHumidityLabel");
-            const humBar = document.getElementById("weatherHumidityBar");
-            const windEl = document.getElementById("weatherWind");
-
-            if (tempEl) tempEl.textContent = `${w.temperature}°C`;
-            if (feelsEl) feelsEl.textContent = `Feels ${w.feels_like}°C`;
-            if (condEl) condEl.textContent = (w.description || "").charAt(0).toUpperCase() + (w.description || "").slice(1);
-            if (cityEl) cityEl.textContent = `${w.city}, ${w.country || 'IN'}`;
-            if (humEl) humEl.textContent = `Humidity ${w.humidity}%`;
-            if (humLabel) humLabel.textContent = `${w.humidity}%`;
-            if (humBar) humBar.style.width = `${Math.min(100, Math.max(0, w.humidity))}%`;
-            if (windEl) windEl.textContent = `Wind: ${w.wind_speed} m/s`;
+            updateWeatherUI(data.weather);
         } else {
             loadWeather();
         }
-        showToast("Live surrounding weather synced!", "info");
+        showToast("Live weather synced!", "info");
     }
 
     // Instantly trigger and sync Music if music playback intent
@@ -1192,43 +1510,207 @@ async function loadWellbeing() {
 // =========================================================================
 // 10. CONVERSATION SESSIONS & THREADS
 // =========================================================================
-async function loadConversations() {
+// 10. CONVERSATION LIFECYCLE, MULTI-TURN PERSISTENCE & DELETION
+// =========================================================================
+
+// Restore persisted active conversation from localStorage
+try {
+    const savedConv = localStorage.getItem("novaCurrentConversationId");
+    if (savedConv) currentConversationId = savedConv;
+} catch (_) {}
+
+function updateActiveConversationHeader(title) {
+    const titleEl = document.getElementById("activeConversationTitle");
+    if (titleEl) {
+        titleEl.textContent = title || "Main Session";
+    }
+}
+
+function renderWelcomeMessage() {
+    if (!chatFeed) return;
+    chatFeed.innerHTML = `
+        <div class="flex items-start space-x-3 bg-slate-900/80 border border-slate-800 p-4 rounded-2xl shadow-lg">
+            <div class="w-8 h-8 rounded-lg bg-cyan-600/20 text-cyan-400 flex items-center justify-center shrink-0">
+                <i data-lucide="sparkles" class="w-4 h-4"></i>
+            </div>
+            <div class="text-sm space-y-2 flex-1">
+                <div class="font-semibold text-cyan-400 flex items-center justify-between">
+                    <span>Nova Assistant</span>
+                    <span class="text-[10px] text-slate-500 font-mono">Conversational AI Ready</span>
+                </div>
+                <p class="text-slate-300 leading-relaxed">
+                    Hello! I am **NOVA AI — ALEXA-NEXT 2.0**, your conversational personal assistant. I can chat naturally with you, tell you live weather worldwide, play any song on demand, set smart alarms and timers, deliver breaking news, and manage your smart home. What would you like to do?
+                </p>
+            </div>
+        </div>
+    `;
+    if (window.lucide) lucide.createIcons();
+}
+
+async function loadConversations(autoSelectFirstIfEmpty = false) {
     try {
         const res = await fetch("/api/conversations");
         const data = await res.json();
         const list = data.conversations || [];
 
-        if (conversationsList) {
-            conversationsList.innerHTML = list.map(c => `
-                <button onclick="switchConversation('${c.id}')" class="w-full text-left p-1.5 rounded-lg truncate transition flex items-center justify-between ${c.id === currentConversationId ? 'bg-cyan-950/80 text-cyan-300 font-medium' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}">
-                    <span class="truncate">${escapeHtml(c.title)}</span>
-                    <span class="text-[10px] text-slate-500 ml-1 font-mono">${c.message_count || 0}</span>
-                </button>
-            `).join('');
+        // If currentConversationId is not in list, fallback to first thread
+        if (autoSelectFirstIfEmpty && list.length > 0) {
+            const exists = list.some(c => c.id === currentConversationId);
+            if (!exists) {
+                currentConversationId = list[0].id;
+                try { localStorage.setItem("novaCurrentConversationId", currentConversationId); } catch (_) {}
+            }
         }
+
+        const activeConv = list.find(c => c.id === currentConversationId);
+        updateActiveConversationHeader(activeConv ? activeConv.title : "Main Session");
+
+        if (conversationsList) {
+            if (list.length === 0) {
+                conversationsList.innerHTML = `<div class="text-[11px] text-slate-500 text-center py-2">No saved threads</div>`;
+            } else {
+                conversationsList.innerHTML = list.map(c => {
+                    const isActive = c.id === currentConversationId;
+                    return `
+                        <div class="group flex items-center justify-between p-1.5 rounded-lg transition ${isActive ? 'bg-cyan-950/80 text-cyan-300 font-medium' : 'text-slate-400 hover:bg-slate-800/80 hover:text-white'}">
+                            <button onclick="switchConversation('${c.id}')" class="flex-1 text-left truncate flex items-center justify-between mr-1" title="${escapeAttr(c.title)}">
+                                <span class="truncate text-xs">${escapeHtml(c.title)}</span>
+                                <span class="text-[10px] text-slate-500 font-mono ml-1 shrink-0">${c.message_count || 0}</span>
+                            </button>
+                            <button onclick="deleteConversationThread('${c.id}', event)" class="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400 text-slate-500 rounded transition shrink-0" title="Delete this conversation">
+                                <i data-lucide="trash" class="w-3 h-3"></i>
+                            </button>
+                        </div>
+                    `;
+                }).join('');
+                if (window.lucide) lucide.createIcons();
+            }
+        }
+        return list;
     } catch (e) {
         console.error("Error loading conversations:", e);
+        return [];
     }
 }
+window.loadConversations = loadConversations;
 
 async function switchConversation(id) {
+    if (!id) return;
     currentConversationId = id;
+    try { localStorage.setItem("novaCurrentConversationId", currentConversationId); } catch (_) {}
     loadConversations();
     chatFeed.innerHTML = "";
     try {
         const res = await fetch(`/api/conversations/${id}/messages`);
         const data = await res.json();
-        for (const m of data.messages || []) {
-            if (m.role === "user") {
-                appendUserMessage(m.content);
-            } else {
-                appendAssistantMessage(m.content, m.payload);
+        const messages = data.messages || [];
+        if (messages.length === 0) {
+            renderWelcomeMessage();
+        } else {
+            for (const m of messages) {
+                if (m.role === "user") {
+                    appendUserMessage(m.content);
+                } else {
+                    appendAssistantMessage(m.content, m.payload);
+                }
             }
         }
     } catch (e) {
         console.error("Error loading thread messages:", e);
     }
 }
+window.switchConversation = switchConversation;
+
+async function createNewConversation(customTitle = null) {
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const title = customTitle || `Session ${timeStr}`;
+    try {
+        const res = await fetch("/api/conversations", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title: title })
+        });
+        const data = await res.json();
+        currentConversationId = data.id;
+        try { localStorage.setItem("novaCurrentConversationId", currentConversationId); } catch (_) {}
+        await loadConversations();
+        chatFeed.innerHTML = "";
+        renderWelcomeMessage();
+        showToast("Started new conversation session", "info");
+    } catch (e) {
+        showToast("Could not create new conversation", "error");
+    }
+}
+window.createNewConversation = createNewConversation;
+
+async function deleteConversationThread(id, event) {
+    if (event) event.stopPropagation();
+    if (!confirm("Are you sure you want to delete this conversation thread?")) return;
+
+    try {
+        const res = await fetch(`/api/conversations/${id}`, { method: "DELETE" });
+        if (!res.ok) throw new Error("Delete failed");
+        showToast("Conversation deleted", "success");
+
+        const remaining = await loadConversations();
+        if (currentConversationId === id) {
+            if (remaining.length > 0) {
+                await switchConversation(remaining[0].id);
+            } else {
+                await createNewConversation("Main Session");
+            }
+        }
+    } catch (e) {
+        showToast("Failed to delete conversation", "error");
+    }
+}
+window.deleteConversationThread = deleteConversationThread;
+
+async function deleteActiveConversation() {
+    deleteConversationThread(currentConversationId);
+}
+window.deleteActiveConversation = deleteActiveConversation;
+
+async function clearAllConversations() {
+    if (!confirm("⚠️ Are you sure you want to delete ALL saved conversations and clear entire chat history?")) return;
+
+    try {
+        const res = await fetch("/api/conversations", { method: "DELETE" });
+        if (!res.ok) throw new Error("Clear all failed");
+        const data = await res.json();
+        currentConversationId = data.active_session || "default-session";
+        try { localStorage.setItem("novaCurrentConversationId", currentConversationId); } catch (_) {}
+        chatFeed.innerHTML = "";
+        renderWelcomeMessage();
+        await loadConversations();
+        showToast("All conversations and message history cleared!", "success");
+    } catch (e) {
+        showToast("Failed to clear conversations", "error");
+    }
+}
+window.clearAllConversations = clearAllConversations;
+
+async function renameCurrentConversation() {
+    const titleEl = document.getElementById("activeConversationTitle");
+    const currentTitle = titleEl ? titleEl.textContent : "Main Session";
+    const newTitle = prompt("Enter new title for this conversation:", currentTitle);
+    if (!newTitle || !newTitle.trim() || newTitle.trim() === currentTitle) return;
+
+    try {
+        const res = await fetch(`/api/conversations/${currentConversationId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title: newTitle.trim() })
+        });
+        if (!res.ok) throw new Error("Rename failed");
+        updateActiveConversationHeader(newTitle.trim());
+        loadConversations();
+        showToast("Conversation renamed", "success");
+    } catch (e) {
+        showToast("Could not rename conversation", "error");
+    }
+}
+window.renameCurrentConversation = renameCurrentConversation;
 
 // =========================================================================
 // 11. MAP & GEOLOCATION
@@ -1296,17 +1778,48 @@ async function syncBackendLocation(lat, lng, accuracy) {
 // =========================================================================
 // 12. EMERGENCY SOS & AUDIO SIREN
 // =========================================================================
-function triggerSOSModal(payload) {
+function triggerSOSModal(payload = {}) {
     if (!sosModal) return;
     sosModal.classList.remove("hidden");
-    if (sosCoordsBox) {
-        sosCoordsBox.textContent = `Lat: ${currentCoords.lat.toFixed(5)}, Lng: ${currentCoords.lng.toFixed(5)}`;
+    sosModal.style.display = "flex";
+
+    if (window.setNovaAvatarState) {
+        window.setNovaAvatarState("emergency");
     }
+
+    const lat = (currentCoords && currentCoords.lat) ? currentCoords.lat : 12.9716;
+    const lng = (currentCoords && currentCoords.lng) ? currentCoords.lng : 77.5946;
+    const address = (currentLocation && currentLocation.address) ? currentLocation.address : "Bangalore, Karnataka, India";
+
+    if (sosCoordsBox) {
+        sosCoordsBox.textContent = `Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}`;
+    }
+    const addressBox = document.getElementById("sosAddressBox");
+    if (addressBox) addressBox.textContent = address;
+
+    const mapsLink = document.getElementById("sosGoogleMapsLink");
+    if (mapsLink) mapsLink.href = `https://maps.google.com/?q=${lat},${lng}`;
+
+    const textToEncode = `🚨 EMERGENCY SOS ALERT! Nova AI detected distress. Time: ${new Date().toLocaleTimeString()} Location: Coordinates: ${lat.toFixed(5)}, ${lng.toFixed(5)} (${address}) Live Map: https://maps.google.com/?q=${lat},${lng} Medical: Blood: O+, Allergies: Penicillin. Please dispatch help immediately.`;
+    const encoded = encodeURIComponent(textToEncode);
+
+    const waBtn = document.getElementById("sosWhatsAppBtn");
+    if (waBtn) waBtn.href = `https://api.whatsapp.com/send?text=${encoded}`;
+
+    const smsBtn = document.getElementById("sosSmsBtn");
+    if (smsBtn) smsBtn.href = `sms:?body=${encoded}`;
+
+    speakText("Emergency SOS activated. Live location coordinates broadcasted and siren sounding.");
     startSiren();
 }
 
+let sirenInterval = null;
+let sirenMuted = false;
+
 function startSiren() {
     try {
+        stopSiren();
+        if (sirenMuted) return;
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         if (!AudioCtx) return;
         sirenAudioContext = new AudioCtx();
@@ -1314,10 +1827,17 @@ function startSiren() {
         const gain = sirenAudioContext.createGain();
 
         sirenOscillator.type = "sawtooth";
-        sirenOscillator.frequency.setValueAtTime(650, sirenAudioContext.currentTime);
-        sirenOscillator.frequency.exponentialRampToValueAtTime(950, sirenAudioContext.currentTime + 0.5);
+        gain.gain.setValueAtTime(0.2, sirenAudioContext.currentTime);
 
-        gain.gain.setValueAtTime(0.15, sirenAudioContext.currentTime);
+        let high = false;
+        sirenOscillator.frequency.setValueAtTime(650, sirenAudioContext.currentTime);
+        sirenInterval = setInterval(() => {
+            if (!sirenAudioContext || !sirenOscillator) return;
+            const target = high ? 650 : 960;
+            sirenOscillator.frequency.cancelScheduledValues(sirenAudioContext.currentTime);
+            sirenOscillator.frequency.linearRampToValueAtTime(target, sirenAudioContext.currentTime + 0.3);
+            high = !high;
+        }, 360);
 
         sirenOscillator.connect(gain);
         gain.connect(sirenAudioContext.destination);
@@ -1329,14 +1849,220 @@ function startSiren() {
 
 function stopSiren() {
     try {
-        if (sirenOscillator) sirenOscillator.stop();
-        if (sirenAudioContext) sirenAudioContext.close();
+        if (sirenInterval) { clearInterval(sirenInterval); sirenInterval = null; }
+        if (sirenOscillator) { sirenOscillator.stop(); sirenOscillator.disconnect(); sirenOscillator = null; }
+        if (sirenAudioContext && sirenAudioContext.state !== "closed") { sirenAudioContext.close(); sirenAudioContext = null; }
     } catch (e) {}
+}
+
+function toggleSirenMute() {
+    sirenMuted = !sirenMuted;
+    const btn = document.getElementById("muteSirenBtn");
+    if (sirenMuted) {
+        stopSiren();
+        if (btn) btn.textContent = "🔇 Unmute Siren";
+        showToast("Emergency siren muted.", "info");
+    } else {
+        startSiren();
+        if (btn) btn.textContent = "🔊 Mute Siren";
+        showToast("Emergency siren unmuted.", "info");
+    }
 }
 
 // =========================================================================
 // 13. SIDEBAR TABS: FULL INTERACTIVE VIEWS FOR ALL FEATURES
 // =========================================================================
+
+
+// =========================================================================
+// 12B. ALEXA ECOSYSTEM CONTROLLER (FIRE TV, RING DOORBELL & ECOBEE)
+// =========================================================================
+
+let currentEcosystemMiniTab = "fire_tv";
+let ecosystemState = {};
+
+async function loadAlexaEcosystem() {
+    try {
+        const res = await fetch("/api/alexa/devices");
+        if (!res.ok) return;
+        ecosystemState = await res.json();
+        renderEcosystemMiniWidget();
+    } catch (e) {
+        console.warn("Could not load Alexa ecosystem devices:", e);
+    }
+}
+
+function switchEcosystemMiniTab(tab) {
+    currentEcosystemMiniTab = tab;
+    ["fire_tv", "ring", "ecobee"].forEach(t => {
+        const btn = document.getElementById(`ecoTabBtn${t === 'fire_tv' ? 'Firetv' : (t === 'ring' ? 'Ring' : 'Ecobee')}`);
+        if (btn) {
+            if (t === tab) {
+                btn.className = "text-[9px] px-2 py-0.5 rounded-full bg-orange-600 text-white font-medium";
+            } else {
+                btn.className = "text-[9px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 hover:text-white font-medium";
+            }
+        }
+    });
+    renderEcosystemMiniWidget();
+}
+
+function renderEcosystemMiniWidget() {
+    const container = document.getElementById("ecosystemMiniContainer");
+    if (!container) return;
+
+    if (currentEcosystemMiniTab === "fire_tv") {
+        const tv = ecosystemState.fire_tv || { power: true, current_app: "Prime Video", volume: 35, now_playing: { title: "The Rings of Power" } };
+        container.innerHTML = `
+            <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                    <span class="font-semibold text-slate-200">Fire TV 4K Max</span>
+                    <span class="text-[10px] px-2 py-0.5 rounded-full ${tv.power ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/60' : 'bg-slate-800 text-slate-400'}">${tv.power ? 'ON • ' + tv.current_app : 'Standby'}</span>
+                </div>
+                <div class="p-2 rounded-xl bg-slate-950 border border-slate-800 text-[11px] space-y-1">
+                    <p class="text-white font-medium truncate">🎬 ${escapeHtml(tv.now_playing?.title || 'Prime Video Stream')}</p>
+                    <p class="text-slate-400 text-[10px]">Playback: ${tv.playback_state || 'Playing'} • Volume: ${tv.volume}%</p>
+                </div>
+                <!-- Mini Remote Pad -->
+                <div class="firetv-remote-dpad my-1">
+                    <button type="button" class="firetv-dpad-btn firetv-dpad-up" onclick="fireTvAction('nav', 'up')"><i data-lucide="chevron-up" class="w-4 h-4"></i></button>
+                    <button type="button" class="firetv-dpad-btn firetv-dpad-down" onclick="fireTvAction('nav', 'down')"><i data-lucide="chevron-down" class="w-4 h-4"></i></button>
+                    <button type="button" class="firetv-dpad-btn firetv-dpad-left" onclick="fireTvAction('nav', 'left')"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+                    <button type="button" class="firetv-dpad-btn firetv-dpad-right" onclick="fireTvAction('nav', 'right')"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+                    <button type="button" class="firetv-dpad-ok" onclick="fireTvAction('nav', 'select')">OK</button>
+                </div>
+                <!-- Playback & App Launcher -->
+                <div class="grid grid-cols-4 gap-1 pt-1 text-[10px]">
+                    <button type="button" onclick="fireTvAction('playback', 'toggle')" class="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200">${tv.playback_state === 'paused' ? '▶ Play' : '⏸ Pause'}</button>
+                    <button type="button" onclick="fireTvAction('app', 'Prime Video')" class="p-1 rounded bg-sky-900/60 hover:bg-sky-800 text-sky-200">Prime</button>
+                    <button type="button" onclick="fireTvAction('app', 'Netflix')" class="p-1 rounded bg-red-950/70 hover:bg-red-900 text-red-200">Netflix</button>
+                    <button type="button" onclick="fireTvAction('app', 'YouTube')" class="p-1 rounded bg-rose-950/70 hover:bg-rose-900 text-rose-200">YouTube</button>
+                </div>
+            </div>
+        `;
+    } else if (currentEcosystemMiniTab === "ring") {
+        const ring = ecosystemState.ring_doorbell || { battery: 88, security_mode: "home", recent_events: [{ event: "Front Door Standby", time: "Now" }] };
+        container.innerHTML = `
+            <div class="space-y-2">
+                <div class="ring-cam-stream">
+                    <img src="https://images.unsplash.com/photo-1558036117-15d82a90b9b1?w=500&auto=format&fit=crop&q=80" class="w-full h-full object-cover opacity-80" alt="Ring Front Door">
+                    <div class="ring-cam-overlay">
+                        <div class="flex justify-between items-center text-[10px] text-white">
+                            <span class="ring-rec-badge"><span class="ring-rec-dot"></span> LIVE REC</span>
+                            <span class="font-mono bg-black/60 px-1.5 py-0.5 rounded">1080p • Bat ${ring.battery}%</span>
+                        </div>
+                        <div class="flex justify-between items-center text-[10px] text-white">
+                            <span class="font-semibold">Front Porch & Doorstep</span>
+                            <span class="text-[9px] text-slate-300 font-mono">${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-1.5 pt-1 text-[10px]">
+                    <button type="button" onclick="ringAction('chime')" class="p-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-semibold flex items-center justify-center space-x-1">
+                        <i data-lucide="bell" class="w-3.5 h-3.5"></i>
+                        <span>Ring Doorbell</span>
+                    </button>
+                    <button type="button" onclick="ringAction('talk')" class="p-1.5 rounded-lg ${ring.two_way_talk_active ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300 hover:text-white'} font-semibold flex items-center justify-center space-x-1">
+                        <i data-lucide="mic" class="w-3.5 h-3.5"></i>
+                        <span>${ring.two_way_talk_active ? 'Speaking...' : '2-Way Talk'}</span>
+                    </button>
+                </div>
+                <button type="button" onclick="ringAction('quick_reply', 0)" class="w-full text-left p-1.5 rounded bg-slate-950 border border-slate-800 text-[10px] text-slate-300 hover:border-slate-700">
+                    💬 "Please leave the package outside the door."
+                </button>
+            </div>
+        `;
+    } else if (currentEcosystemMiniTab === "ecobee") {
+        const eco = ecosystemState.ecobee_thermostat || { current_temp: 23.5, target_temp: 21.0, hvac_mode: "cool", humidity: 48, eco_mode: true };
+        container.innerHTML = `
+            <div class="space-y-2 text-center">
+                <div class="ecobee-dial-wrap">
+                    <span class="text-[10px] text-sky-300 font-mono">Current ${eco.current_temp}°C</span>
+                    <span class="text-2xl font-black text-white font-mono tracking-tight">${eco.target_temp}°C</span>
+                    <span class="text-[9px] text-sky-200 uppercase font-semibold tracking-wider">${eco.hvac_mode} MODE</span>
+                </div>
+                <div class="flex items-center justify-center space-x-2 pt-1">
+                    <button type="button" onclick="ecobeeAction('temp_step', -0.5)" class="p-1.5 w-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs">-</button>
+                    <button type="button" onclick="ecobeeAction('eco')" class="px-3 py-1 rounded-lg ${eco.eco_mode ? 'bg-emerald-600 text-white font-bold' : 'bg-slate-800 text-slate-400'} text-xs">Eco Mode</button>
+                    <button type="button" onclick="ecobeeAction('temp_step', 0.5)" class="p-1.5 w-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs">+</button>
+                </div>
+                <div class="flex justify-between text-[10px] text-slate-400 px-2 pt-1 border-t border-slate-800">
+                    <span>Humidity: <b class="text-slate-200">${eco.humidity}%</b></span>
+                    <span>Air Quality: <b class="text-emerald-400">Clean (AQI 22)</b></span>
+                </div>
+            </div>
+        `;
+    }
+    if (window.lucide) lucide.createIcons();
+}
+
+async function fireTvAction(action, param = null) {
+    try {
+        const res = await fetch("/api/alexa/firetv/action", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action, param })
+        });
+        const data = await res.json();
+        showToast(data.message || "Fire TV command sent.", "info");
+        await loadAlexaEcosystem();
+    } catch (e) {
+        showToast("Fire TV command failed.", "error");
+    }
+}
+
+async function ringAction(action, param = null) {
+    try {
+        if (action === "chime") {
+            playReminderChime();
+        }
+        const res = await fetch("/api/alexa/ring/action", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action, param })
+        });
+        const data = await res.json();
+        showToast(data.message || "Ring command sent.", "info");
+        await loadAlexaEcosystem();
+    } catch (e) {
+        showToast("Ring command failed.", "error");
+    }
+}
+
+async function ecobeeAction(action, param = null) {
+    try {
+        const res = await fetch("/api/alexa/ecobee/action", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action, param })
+        });
+        const data = await res.json();
+        showToast(data.message || "Ecobee thermostat updated.", "success");
+        await loadAlexaEcosystem();
+    } catch (e) {
+        showToast("Ecobee command failed.", "error");
+    }
+}
+
+function openEcosystemModal(tab = "fire_tv") {
+    switchEcosystemMiniTab(tab);
+    handleTabSwitch("ecosystem");
+}
+
+function openDeadlineModal() {
+    const modal = document.getElementById("deadlineModal");
+    if (!modal) return;
+    modal.classList.remove("hidden");
+    modal.style.display = "flex";
+}
+
+function closeDeadlineModal() {
+    const modal = document.getElementById("deadlineModal");
+    if (!modal) return;
+    modal.classList.add("hidden");
+    modal.style.display = "none";
+}
+
 function openModal(title, iconHtml, contentHtml) {
     const modal = document.getElementById("genericModal");
     const heading = document.getElementById("genericModalHeading");
@@ -1434,6 +2160,162 @@ async function handleTabSwitch(tab) {
             );
         }
 
+        // Alexa Ecosystem Tab
+        else if (tab === "ecosystem") {
+            await loadAlexaEcosystem();
+            const tv = ecosystemState.fire_tv || {};
+            const ring = ecosystemState.ring_doorbell || {};
+            const eco = ecosystemState.ecobee_thermostat || {};
+            openModal(
+                "Alexa Ecosystem (Fire TV, Ring Doorbell & Ecobee)",
+                '<i data-lucide="layers" class="w-5 h-5 text-orange-400"></i>',
+                `
+                <div class="space-y-5 text-xs">
+                    <!-- 1. Amazon Fire TV 4K Max -->
+                    <div class="p-4 rounded-2xl bg-slate-950 border border-orange-500/30 space-y-3">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center space-x-2">
+                                <i data-lucide="tv-2" class="w-5 h-5 text-orange-400"></i>
+                                <h4 class="font-bold text-white text-sm">Amazon Fire TV 4K Max (Living Room)</h4>
+                            </div>
+                            <button onclick="fireTvAction('power')" class="px-2.5 py-1 rounded-lg ${tv.power ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-400'} font-semibold text-xs">${tv.power ? 'Power ON' : 'Standby'}</button>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                            <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5">
+                                <p class="text-orange-300 font-semibold">Now Playing:</p>
+                                <p class="text-white font-bold text-xs">${escapeHtml(tv.now_playing?.title || 'Prime Video Stream')}</p>
+                                <p class="text-slate-400 text-[11px]">${escapeHtml(tv.now_playing?.quality || '4K Ultra HD • Dolby Atmos')}</p>
+                                <div class="flex space-x-2 pt-2">
+                                    <button onclick="fireTvAction('playback', 'play')" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded">Play</button>
+                                    <button onclick="fireTvAction('playback', 'pause')" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded">Pause</button>
+                                    <button onclick="fireTvAction('volume', 5)" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded">Vol +</button>
+                                    <button onclick="fireTvAction('volume', -5)" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded">Vol -</button>
+                                </div>
+                            </div>
+                            <!-- Remote D-Pad -->
+                            <div class="firetv-remote-dpad">
+                                <button type="button" class="firetv-dpad-btn firetv-dpad-up" onclick="fireTvAction('nav', 'up')"><i data-lucide="chevron-up" class="w-4 h-4"></i></button>
+                                <button type="button" class="firetv-dpad-btn firetv-dpad-down" onclick="fireTvAction('nav', 'down')"><i data-lucide="chevron-down" class="w-4 h-4"></i></button>
+                                <button type="button" class="firetv-dpad-btn firetv-dpad-left" onclick="fireTvAction('nav', 'left')"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+                                <button type="button" class="firetv-dpad-btn firetv-dpad-right" onclick="fireTvAction('nav', 'right')"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+                                <button type="button" class="firetv-dpad-ok" onclick="fireTvAction('nav', 'select')">OK</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. Ring Video Doorbell Pro -->
+                    <div class="p-4 rounded-2xl bg-slate-950 border border-cyan-500/30 space-y-3">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center space-x-2">
+                                <i data-lucide="bell-ring" class="w-5 h-5 text-cyan-400"></i>
+                                <h4 class="font-bold text-white text-sm">Ring Video Doorbell Pro (Front Door)</h4>
+                            </div>
+                            <span class="text-xs px-2.5 py-1 rounded-full bg-cyan-950 border border-cyan-800 text-cyan-400 font-mono">Battery ${ring.battery}% • WiFi Good</span>
+                        </div>
+                        <div class="ring-cam-stream">
+                            <img src="https://images.unsplash.com/photo-1558036117-15d82a90b9b1?w=700&auto=format&fit=crop&q=80" class="w-full h-full object-cover" alt="Ring Front Door">
+                            <div class="ring-cam-overlay">
+                                <div class="flex justify-between items-center text-[11px] text-white">
+                                    <span class="ring-rec-badge"><span class="ring-rec-dot"></span> LIVE REC</span>
+                                    <span class="font-mono bg-black/60 px-2 py-0.5 rounded">1080p HD HDR</span>
+                                </div>
+                                <div class="flex justify-between items-center text-[11px] text-white">
+                                    <span>Front Porch &amp; Driveway</span>
+                                    <span class="font-mono">${new Date().toLocaleTimeString()}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button onclick="ringAction('chime')" class="flex-1 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold">Ring Chime</button>
+                            <button onclick="ringAction('talk')" class="flex-1 py-2 rounded-xl ${ring.two_way_talk_active ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300 hover:text-white'} font-bold">${ring.two_way_talk_active ? 'Speaking to Visitor...' : '2-Way Talk'}</button>
+                            <button onclick="ringAction('quick_reply', 0)" class="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300">Quick Reply</button>
+                        </div>
+                    </div>
+
+                    <!-- 3. Ecobee Smart Thermostat -->
+                    <div class="p-4 rounded-2xl bg-slate-950 border border-emerald-500/30 space-y-3">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center space-x-2">
+                                <i data-lucide="thermometer-sun" class="w-5 h-5 text-emerald-400"></i>
+                                <h4 class="font-bold text-white text-sm">Ecobee Smart Thermostat Premium</h4>
+                            </div>
+                            <span class="text-xs px-2.5 py-1 rounded-full bg-emerald-950 border border-emerald-800 text-emerald-400">Current ${eco.current_temp}°C • Humidity ${eco.humidity}%</span>
+                        </div>
+                        <div class="flex items-center justify-around py-2">
+                            <div class="ecobee-dial-wrap">
+                                <span class="text-xs text-sky-300 font-mono">Current ${eco.current_temp}°C</span>
+                                <span class="text-3xl font-black text-white font-mono">${eco.target_temp}°C</span>
+                                <span class="text-[10px] text-sky-200 uppercase font-semibold">${eco.hvac_mode}</span>
+                            </div>
+                            <div class="space-y-2">
+                                <div class="flex space-x-2">
+                                    <button onclick="ecobeeAction('temp_step', -0.5); setTimeout(() => handleTabSwitch('ecosystem'), 200);" class="px-4 py-2 rounded-xl bg-slate-800 text-white font-bold text-base">-</button>
+                                    <button onclick="ecobeeAction('temp_step', 0.5); setTimeout(() => handleTabSwitch('ecosystem'), 200);" class="px-4 py-2 rounded-xl bg-slate-800 text-white font-bold text-base">+</button>
+                                </div>
+                                <div class="flex space-x-1.5 text-xs">
+                                    <button onclick="ecobeeAction('hvac_mode', 'cool'); setTimeout(() => handleTabSwitch('ecosystem'), 200);" class="px-3 py-1 rounded ${eco.hvac_mode === 'cool' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300'}">Cool</button>
+                                    <button onclick="ecobeeAction('hvac_mode', 'heat'); setTimeout(() => handleTabSwitch('ecosystem'), 200);" class="px-3 py-1 rounded ${eco.hvac_mode === 'heat' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-300'}">Heat</button>
+                                    <button onclick="ecobeeAction('eco'); setTimeout(() => handleTabSwitch('ecosystem'), 200);" class="px-3 py-1 rounded ${eco.eco_mode ? 'bg-emerald-600 text-white font-bold' : 'bg-slate-800 text-slate-300'}">Eco</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                `
+            );
+        }
+        // Emergency SOS & ICE Card Tab
+        else if (tab === "sos") {
+            const res = await fetch("/api/sos/contacts");
+            const data = await res.json();
+            const contacts = data.contacts || [];
+            const med = data.medical_info || {};
+            openModal(
+                "Emergency SOS Guardian & Medical ICE Profile",
+                '<i data-lucide="shield-alert" class="w-5 h-5 text-red-500"></i>',
+                `
+                <div class="space-y-4 text-xs">
+                    <div class="p-3.5 rounded-xl bg-red-950/40 border border-red-500/40 flex justify-between items-center">
+                        <div>
+                            <h4 class="font-bold text-red-300 text-sm">Emergency SOS Dispatcher</h4>
+                            <p class="text-slate-300 text-[11px]">Clicking Trigger SOS transmits live GPS coords, sounds distress siren, and alerts family.</p>
+                        </div>
+                        <button onclick="triggerSOSModal({}); closeModal();" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-lg shadow-red-600/40">TRIGGER SOS</button>
+                    </div>
+
+                    <!-- Medical ICE Card -->
+                    <div class="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                        <h4 class="font-bold text-slate-200">Medical ICE Card (In Case of Emergency)</h4>
+                        <div class="grid grid-cols-2 gap-2 text-[11px]">
+                            <div><span class="text-slate-500">Blood Type:</span> <b class="text-rose-400 font-mono">${escapeHtml(med.blood_type || 'O+')}</b></div>
+                            <div><span class="text-slate-500">Allergies:</span> <b class="text-slate-200">${escapeHtml(med.allergies || 'None')}</b></div>
+                            <div><span class="text-slate-500">Medications:</span> <b class="text-slate-200">${escapeHtml(med.medications || 'None')}</b></div>
+                            <div><span class="text-slate-500">Emergency Notes:</span> <b class="text-slate-200">${escapeHtml(med.emergency_notes || 'Contact Family')}</b></div>
+                        </div>
+                    </div>
+
+                    <!-- Emergency Contacts List -->
+                    <div class="space-y-2">
+                        <h4 class="font-bold text-slate-200">Emergency Speed Dial Contacts</h4>
+                        <div class="space-y-1.5">
+                            ${contacts.map(c => `
+                                <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex justify-between items-center">
+                                    <div>
+                                        <p class="font-semibold text-white">${escapeHtml(c.name)} <span class="text-[10px] text-slate-400">(${escapeHtml(c.relationship)})</span></p>
+                                        <p class="font-mono text-cyan-400 text-[11px]">${escapeHtml(c.phone)}</p>
+                                    </div>
+                                    <a href="tel:${c.phone}" class="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold flex items-center space-x-1">
+                                        <i data-lucide="phone" class="w-3.5 h-3.5"></i>
+                                        <span>Call</span>
+                                    </a>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+                `
+            );
+        }
         // 2. Music Player Tab
         else if (tab === "music") {
             const res = await fetch("/api/music/state");
@@ -1451,6 +2333,31 @@ async function handleTabSwitch(tab) {
                 "",
                 `
                 <div class="space-y-4">
+                    <!-- Live Song & Artist Universal Search -->
+                    <div class="space-y-2">
+                        <div class="flex gap-2">
+                            <div class="relative flex-1">
+                                <input type="text" id="modalMusicSearchInput" placeholder="Search any song or artist (e.g. Shape of You, Believer, Taylor Swift)..." 
+                                       class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 pl-8 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-pink-500 transition"
+                                       onkeydown="if(event.key==='Enter'){ searchAndPlayMusic(this.value); setTimeout(function(){ handleTabSwitch('music'); }, 600); }">
+                                <i data-lucide="search" class="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5 pointer-events-none"></i>
+                            </div>
+                            <button onclick="searchAndPlayMusic(document.getElementById('modalMusicSearchInput').value); setTimeout(function(){ handleTabSwitch('music'); }, 600);"
+                                    class="px-3.5 py-2 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-semibold text-xs transition flex items-center space-x-1 shrink-0">
+                                <i data-lucide="play" class="w-3.5 h-3.5"></i>
+                                <span>Play</span>
+                            </button>
+                        </div>
+                        <div class="flex items-center space-x-1.5 overflow-x-auto pb-1 text-[11px]">
+                            <span class="text-slate-500 font-mono text-[10px] shrink-0">Trending:</span>
+                            <button onclick="searchAndPlayMusic('Shape of You Ed Sheeran'); setTimeout(function(){ handleTabSwitch('music'); }, 600);" class="px-2 py-0.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 shrink-0">Shape of You</button>
+                            <button onclick="searchAndPlayMusic('Believer Imagine Dragons'); setTimeout(function(){ handleTabSwitch('music'); }, 600);" class="px-2 py-0.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 shrink-0">Believer</button>
+                            <button onclick="searchAndPlayMusic('Starboy The Weeknd'); setTimeout(function(){ handleTabSwitch('music'); }, 600);" class="px-2 py-0.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 shrink-0">Starboy</button>
+                            <button onclick="searchAndPlayMusic('Taylor Swift Cruel Summer'); setTimeout(function(){ handleTabSwitch('music'); }, 600);" class="px-2 py-0.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 shrink-0">Cruel Summer</button>
+                            <button onclick="searchAndPlayMusic('Kesariya Arijit Singh'); setTimeout(function(){ handleTabSwitch('music'); }, 600);" class="px-2 py-0.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 shrink-0">Kesariya</button>
+                        </div>
+                    </div>
+
                     <!-- Now Playing Spotlight -->
                     <div class="p-4 bg-gradient-to-br from-slate-950 via-slate-900 to-pink-950/40 rounded-2xl border border-pink-500/30 flex flex-col sm:flex-row items-center space-y-3 sm:space-y-0 sm:space-x-4">
                         <img src="${cur.cover_art || ''}" class="w-24 h-24 rounded-2xl object-cover border border-slate-800 shadow-xl shadow-pink-900/20 shrink-0">
@@ -1461,6 +2368,14 @@ async function handleTabSwitch(tab) {
                             <h3 class="text-base font-bold text-white truncate mt-1">${escapeHtml(cur.title || 'Favourite Track')}</h3>
                             <p class="text-xs text-pink-300/90 truncate">${escapeHtml(cur.artist || '')}</p>
                             <p class="text-[11px] text-slate-500 truncate">${escapeHtml(cur.album || '')} • ${cur.duration || ''}</p>
+
+                            <div class="flex flex-wrap items-center justify-center sm:justify-start gap-1.5 mt-2">
+                                <button onclick="openFullSongPlayer(null, '${escapeAttr(cur.title || '')}', '${escapeAttr(cur.artist || '')}')" class="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-pink-600 hover:bg-pink-500 text-white text-[10px] font-semibold transition shadow-md shadow-pink-600/30">
+                                    <span>▶️ Play Full Song</span>
+                                </button>
+                                ${cur.spotify_url ? `<a href="${cur.spotify_url}" target="_blank" class="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-700/60 text-emerald-300 text-[10px] font-semibold transition"><span>🟢 Spotify</span></a>` : ''}
+                                ${cur.youtube_url ? `<a href="${cur.youtube_url}" target="_blank" class="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-red-950/70 hover:bg-red-900 border border-red-700/60 text-red-300 text-[10px] font-semibold transition"><span>▶️ YouTube</span></a>` : ''}
+                            </div>
 
                             <!-- Controls -->
                             <div class="flex items-center justify-center sm:justify-start space-x-2 mt-3">
@@ -1621,18 +2536,48 @@ async function handleTabSwitch(tab) {
                         </div>
                     </div>
 
-                    <!-- Google News Top Headlines -->
-                    <div class="space-y-2">
-                        <h4 class="font-bold text-slate-200 text-xs uppercase tracking-wider flex items-center justify-between">
-                            <span>Live Global Headlines</span>
-                            <span class="text-[10px] text-slate-500 font-mono">Google News RSS</span>
-                        </h4>
-                        <div class="space-y-2 max-h-60 overflow-y-auto pr-1">
+                    <!-- Live Multi-Category News Hub -->
+                    <div class="space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <h4 class="font-bold text-slate-200 text-xs uppercase tracking-wider">Live Global News Network</h4>
+                            <span class="text-[10px] text-emerald-400 font-mono font-semibold">Real-Time RSS & APIs</span>
+                        </div>
+
+                        <!-- Category Selector Pills -->
+                        <div class="flex items-center space-x-1.5 overflow-x-auto pb-1 text-xs">
+                            <button onclick="switchNewsCategory('top')" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium shrink-0">🔥 Top</button>
+                            <button onclick="switchNewsCategory('tech')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white shrink-0">💻 Tech & AI</button>
+                            <button onclick="switchNewsCategory('world')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white shrink-0">🌍 World</button>
+                            <button onclick="switchNewsCategory('business')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white shrink-0">📈 Business</button>
+                            <button onclick="switchNewsCategory('science')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white shrink-0">🚀 Science</button>
+                            <button onclick="switchNewsCategory('sports')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white shrink-0">⚽ Sports</button>
+                            <button onclick="switchNewsCategory('entertainment')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white shrink-0">🎬 Entertainment</button>
+                        </div>
+
+                        <!-- Custom Topic Search -->
+                        <div class="flex gap-2">
+                            <div class="relative flex-1">
+                                <input type="text" id="modalNewsTopicInput" placeholder="Search any topic (e.g. artificial intelligence, NASA, stock market)..."
+                                       class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 pl-8 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
+                                       onkeydown="if(event.key==='Enter'){ switchNewsCategory('search', this.value); }">
+                                <i data-lucide="search" class="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2 pointer-events-none"></i>
+                            </div>
+                            <button onclick="switchNewsCategory('search', document.getElementById('modalNewsTopicInput').value)"
+                                    class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition shrink-0">
+                                Search
+                            </button>
+                        </div>
+
+                        <!-- News List Container -->
+                        <div id="liveNewsListContainer" class="space-y-2 max-h-60 overflow-y-auto pr-1">
                             ${news.map(n => `
                                 <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 flex justify-between items-center hover:border-slate-700 transition">
                                     <div class="pr-2">
                                         <h5 class="font-bold text-slate-200 text-xs">${escapeHtml(n.title)}</h5>
-                                        <span class="text-[10px] text-emerald-400 font-mono">${escapeHtml(n.source)}</span>
+                                        <div class="flex items-center space-x-2 mt-1">
+                                            <span class="text-[10px] text-emerald-400 font-mono font-semibold">${escapeHtml(n.source)}</span>
+                                            <span class="text-[9px] text-slate-500 font-mono">${escapeHtml(n.published || '')}</span>
+                                        </div>
                                     </div>
                                     <a href="${n.link}" target="_blank" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-400 text-[10px] font-semibold shrink-0">
                                         Read &rarr;
@@ -1659,7 +2604,7 @@ async function handleTabSwitch(tab) {
             <div class="space-y-3">
                 <div class="flex justify-between items-center">
                     <p class="text-slate-400">Tracked assignments and deadlines (SQLite backed):</p>
-                    <button onclick="document.getElementById('deadlineModal').classList.remove('hidden')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-medium">
+                    <button onclick="openDeadlineModal()" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-medium">
                         + Add New Task
                     </button>
                 </div>
@@ -2078,6 +3023,10 @@ function updateMoodUI(moodData) {
 }
 
 function setupEventListeners() {
+    const muteBtn = document.getElementById("muteSirenBtn");
+    if (muteBtn) {
+        muteBtn.addEventListener("click", toggleSirenMute);
+    }
     // Orb Click to Talk
     if (voiceOrb) voiceOrb.addEventListener("click", toggleListening);
     if (micBtn) micBtn.addEventListener("click", toggleListening);
@@ -2093,19 +3042,7 @@ function setupEventListeners() {
 
     // New Chat Button
     if (newChatBtn) {
-        newChatBtn.addEventListener("click", async () => {
-            const title = `Session ${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
-            const res = await fetch("/api/conversations", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ title })
-            });
-            const data = await res.json();
-            currentConversationId = data.id;
-            loadConversations();
-            chatFeed.innerHTML = "";
-            showToast("Started new conversation", "info");
-        });
+        newChatBtn.addEventListener("click", () => createNewConversation());
     }
 
     // File Upload Attachment
@@ -2180,8 +3117,7 @@ function setupEventListeners() {
     }
     if (closeDeadlineModalBtn) {
         closeDeadlineModalBtn.addEventListener("click", () => {
-            deadlineModal.classList.add("hidden");
-            deadlineModal.style.display = "none";
+            closeDeadlineModal();
         });
     }
     if (deadlineModal) {
@@ -2210,8 +3146,7 @@ function setupEventListeners() {
                 body: JSON.stringify({ title, due_date: date.replace("T", " "), priority, estimated_hours: hours })
             });
 
-            deadlineModal.classList.add("hidden");
-            deadlineModal.style.display = "none";
+            closeDeadlineModal();
             document.getElementById("newDeadlineTitle").value = "";
             loadDeadlines();
             loadProactiveInsights();
